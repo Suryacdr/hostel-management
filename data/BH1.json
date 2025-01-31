@@ -1,0 +1,71 @@
+{
+  "super-admin": [
+    {
+      "email": "superadmin1@admin.com",
+      "name": "Super Admin 1",
+      "username": "superadmin1",
+      "role": "super-admin",
+      "hostels": ["BH1", "BH2"]
+    },
+    {
+      "email": "superadmin2@admin.com",
+      "name": "Super Admin 2",
+      "username": "superadmin2",
+      "role": "super-admin",
+      "hostels": ["GH3", "GH4"]
+    }
+  ],
+  "admin": {
+    "email": "bh1admin@admin.com",
+    "name": "BH1 Admin",
+    "username": "bh1admin",
+    "role": "admin"
+  },
+  "floors": [
+    {
+      "floor_id": "A",
+      "floor_warden": {
+        "email": "floorawarden@coadmin.com",
+        "name": "Floor A Warden",
+        "username": "floorawarden",
+        "role": "co-admin"
+      },
+      "rooms": [
+        {
+          "room_num": "101",
+          "room_capacity": 2,
+          "room_occupant": [
+            {
+              "email": "room101first@student.com",
+              "registrationNumber": 202216001,
+              "name": "Room 101 First",
+              "username": "room101first",
+              "role": "student",
+              "remarks": [
+                {
+                  "date": "2024-12-03",
+                  "dot": true,
+                  "comment": "Missed morning attendance"
+                }
+              ]
+            },
+            {
+              "email": "room101second@student.com",
+              "registrationNumber": 202216002,
+              "name": "Room 101 Second",
+              "username": "room101second",
+              "role": "student",
+              "remarks": []
+            }
+          ],
+          "room_image": [
+            {
+              "url": "",
+              "description": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

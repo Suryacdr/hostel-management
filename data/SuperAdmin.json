@@ -1,0 +1,18 @@
+{
+  "super-admin": [
+    {
+      "email": "superadmin1@admin.com",
+      "name": "Super Admin 1",
+      "username": "superadmin1",
+      "role": "super-admin",
+      "hostels": ["BH1", "BH2"]
+    },
+    {
+      "email": "superadmin2@admin.com",
+      "name": "Super Admin 2",
+      "username": "superadmin2",
+      "role": "super-admin",
+      "hostels": ["GH1", "GH2"]
+    }
+  ]
+}
