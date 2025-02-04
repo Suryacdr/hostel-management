@@ -13,7 +13,7 @@ export default function Home() {
           <AtSign className="w-6 h-6 text-gray-500" />
           <input
             type="text"
-            className="outline-none bg-transparent"
+            className="outline-none bg-transparent w-full"
             placeholder="College email"
           />
         </div>
@@ -21,7 +21,7 @@ export default function Home() {
           <Key className="w-6 h-6 text-gray-500" />
           <input
             type="password"
-            className="outline-none bg-transparent"
+            className="outline-none bg-transparent w-full"
             placeholder="Password"
           />
         </div>
