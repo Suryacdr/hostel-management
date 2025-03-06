@@ -47,6 +47,14 @@
                   "dot": true,
                   "comment": "Missed morning attendance"
                 }
+              ],
+              "issues": [
+                {
+                  "type": "complaints",
+                  "date": "2025-01-12",
+                  "message": "Roommate is too noisy",
+                  "isSolved": false
+                }
               ]
             },
             {
@@ -55,7 +63,21 @@
               "name": "Room 101 Second",
               "username": "room101second",
               "role": "student",
-              "remarks": []
+              "remarks": [],
+              "issues": [
+                {
+                  "type": "complaints",
+                  "date": "2025-01-12",
+                  "message": "Roommate is too noisy",
+                  "isSolved": false
+                },
+                {
+                  "type": "maintenance",
+                  "date": "2025-02-12",
+                  "message": "Water is not coming properly from the basin.",
+                  "isSolved": true
+                }
+              ]
             }
           ],
           "room_image": [

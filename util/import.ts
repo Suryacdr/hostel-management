@@ -35,11 +35,18 @@ interface Remark {
   comment?: string;
 }
 
+interface Issues {
+  type: string;
+  date: string;
+  message: string;
+  isSolved: boolean;
+}
+
 interface Student extends User {
   registrationNumber: string;
   remarks: Remark[];
+  issues: Issues[];
 }
-
 interface Room {
   room_num: string;
   room_capacity: number;

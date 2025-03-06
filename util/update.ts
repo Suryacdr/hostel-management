@@ -34,10 +34,17 @@ interface Remark {
     dot: boolean;
     comment?: string;
 }
+interface Issues {
+    type: string;
+    date: string;
+    message: string;
+    isSolved: boolean;
+}
 
 interface Student extends User {
     registrationNumber: string;
     remarks: Remark[];
+    issues: Issues[];
 }
 
 interface Room {
@@ -131,6 +138,7 @@ async function updateData() {
                             role: occupant.role,
                             registrationNumber: occupant.registrationNumber,
                             remarks: occupant.remarks || [],
+                            issues: occupant.issues || [],
                         },
                         { merge: true }
                     );
@@ -148,6 +156,7 @@ async function updateData() {
                             floor: floor.floor_id,
                             room_num: room.room_num,
                             remarks: occupant.remarks || [],
+                            issues: occupant.issues || [],
                         },
                         { merge: true }
                     );

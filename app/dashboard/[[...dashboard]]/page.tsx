@@ -38,8 +38,7 @@ export default function Dashboard() {
                 <p className="text-xl font-semibold">Q-502</p>
                 <p className="text-sm">Room</p>
               </div>
-            <ThemeToggle />
-
+              <ThemeToggle />
             </div>
             <button className="cursor-pointer">
               <LogOut size={20} />

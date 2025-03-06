@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleUser, AtSign, Key } from "lucide-react";
+import { AtSign, Key } from "lucide-react";
 
 export default function Home() {
   return (
