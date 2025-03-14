@@ -51,7 +51,7 @@ export async function middleware(request: NextRequest) {
         const decodedClaims = await getAuth().verifySessionCookie(sessionCookie, true);
 
         // Check if user has required role for the route
-        const userRole = decodedClaims.role || 'student';
+        const userRole = decodedClaims.role;
         const path = request.nextUrl.pathname;
 
         // Find the most specific matching route
