@@ -15,141 +15,169 @@ const db = admin.firestore();
 
 // Define Types
 interface User {
+  fullName: string;
   email: string;
-  name: string;
-  username: string;
-  role: "super-admin" | "admin" | "co-admin" | "student";
+  phoneNumber: string;
+  role: "chief_warden" | "supervisor" | "hostel_warden" | "floor_warden" | "floor_attendant" | "student";
 }
 
-interface SuperAdmin extends User {
-  hostels: string[];
+interface ChiefWarden extends User {
+  accessLevel: "all";
 }
 
-interface Admin extends User { }
+interface Supervisor extends User {
+  assignedHostels: string[];
+  reportsTo: string;
+}
 
-interface FloorWarden extends User { }
+interface HostelWarden extends User {
+  assignedHostel: string;
+  reportsTo: string;
+}
+
+interface FloorWarden extends User {
+  assignedHostel: string;
+  assignedFloors: string[];
+  reportsTo: string;
+}
+
+interface FloorAttendant extends User {
+  assignedHostel: string;
+  assignedFloors: string[];
+  reportsTo: string;
+}
+
+interface ParentsName {
+  father: string;
+  mother: string;
+}
+
+interface Address {
+  street: string;
+  city: string;
+  state: string;
+  pincode: string;
+}
+
+interface HostelDetails {
+  hostel: string;
+  roomNumber: string;
+  floor: string;
+}
+
+interface RoommateDetails {
+  roommateId: string;
+  roommateName: string;
+}
+
+interface Student extends User {
+  firstName: string;
+  lastName: string;
+  age: number;
+  registrationNumber: number;
+  parentsName: ParentsName;
+  course: string;
+  permanentAddress: Address;
+  hostelDetails: HostelDetails;
+  roommateDetails: RoommateDetails;
+  remarks: Remark[];
+  issues: Issue[];
+}
 
 interface Remark {
   date: string;
   dot: boolean;
-  comment?: string;
+  comment: string;
+  reportedBy: string;
 }
 
-interface Issues {
+interface Issue {
   type: string;
   date: string;
   message: string;
   isSolved: boolean;
+  reportedTo: string;
 }
 
-interface Student extends User {
-  registrationNumber: string;
-  remarks: Remark[];
-  issues: Issues[];
-}
-interface Room {
-  room_num: string;
-  room_capacity: number;
-  room_occupant: Student[];
-  room_image: { url: string; description: string }[];
+interface HostelFloor {
+  floorWarden: string;
+  floorAttendant: string;
+  rooms: string[];
 }
 
-interface Floor {
-  floor_id: string;
-  floor_warden: FloorWarden;
-  rooms: Room[];
+interface Hostel {
+  name: string;
+  warden: string;
+  supervisor: string;
+  totalFloors: number;
+  totalRooms: number;
+  floors: {
+    [key: string]: HostelFloor;
+  };
 }
 
-// Main data type for JSON structure
 interface HostelData {
-  "super-admin": SuperAdmin[];
-  admin?: Admin; // Optional to avoid errors
-  floors: Floor[];
+  roles: {
+    chief_warden: { [key: string]: ChiefWarden };
+    supervisors: { [key: string]: Supervisor };
+    hostel_wardens: { [key: string]: HostelWarden };
+    floor_wardens: { [key: string]: FloorWarden };
+    floor_attendants: { [key: string]: FloorAttendant };
+  };
+  hostels: { [key: string]: Hostel };
+  students: { [key: string]: Student };
 }
 
 async function uploadData() {
   try {
-    // Read and parse JSON file
-    const jsonFilePath = path.join(__dirname, "../data/BH1.json");
+    const jsonFilePath = path.join(__dirname, "./hostel_data.json");
     const jsonData: HostelData = JSON.parse(fs.readFileSync(jsonFilePath, "utf-8"));
 
     console.log("🚀 Uploading data to Firestore...");
 
-    // Upload Super Admins
-    for (const superAdmin of jsonData["super-admin"]) {
-      if (!superAdmin.username) {
-        console.warn("⚠️ Skipping super-admin with missing username", superAdmin);
-        continue;
+    // Upload roles
+    const roles = ["chief_warden", "supervisors", "hostel_wardens", "floor_wardens", "floor_attendants"];
+    for (const role of roles) {
+      for (const [id, userData] of Object.entries(jsonData.roles[role as keyof typeof jsonData.roles])) {
+        await db.collection(role).doc(id).set(userData as FirebaseFirestore.DocumentData);
       }
-      await db.collection("super-admins").doc(superAdmin.username).set(superAdmin);
     }
 
-    // Upload Admin (Handle missing admin)
-    if (!jsonData.admin || !jsonData.admin.username) {
-      console.warn("⚠️ Admin username is missing! Skipping admin upload.");
-    } else {
-      await db.collection("admins").doc(jsonData.admin.username).set(jsonData.admin);
+    // Upload hostels
+    for (const [hostelId, hostelData] of Object.entries(jsonData.hostels)) {
+      const hostelRef = db.collection("hostels").doc(hostelId);
+      await hostelRef.set(hostelData);
+
+      // Upload floors
+      for (const [floorId, floorData] of Object.entries(hostelData.floors)) {
+        const floorRef = hostelRef.collection("floors").doc(floorId);
+        await floorRef.set(floorData);
+      }
     }
 
-    // Upload Hostel Floors and Rooms
-    const hostelRef = db.collection("hostels").doc("BH1");
-    await hostelRef.set({ name: "BH1", admin: jsonData.admin?.username || "unknown" });
+    // Upload students
+    for (const [studentId, studentData] of Object.entries(jsonData.students)) {
+      await db.collection("students").doc(studentId).set(studentData);
 
-    for (const floor of jsonData.floors) {
-      if (!floor.floor_id) {
-        console.warn("⚠️ Skipping floor with missing floor_id", floor);
-        continue;
-      }
+      // Add student to their assigned room
+      const { hostel, floor, roomNumber } = studentData.hostelDetails;
+      const roomRef = db
+        .collection("hostels")
+        .doc(hostel)
+        .collection("floors")
+        .doc(floor)
+        .collection("rooms")
+        .doc(roomNumber);
 
-      const floorRef = hostelRef.collection("floors").doc(floor.floor_id);
-      await floorRef.set({ floorWarden: floor.floor_warden });
-
-      for (const room of floor.rooms) {
-        if (!room.room_num) {
-          console.warn("⚠️ Skipping room with missing room_num", room);
-          continue;
-        }
-
-        const roomRef = floorRef.collection("rooms").doc(room.room_num);
-        await roomRef.set({
-          room_capacity: room.room_capacity,
-          room_image: room.room_image || [],
-        });
-
-        // Upload Room Occupants (Students)
-        for (const occupant of room.room_occupant) {
-          if (!occupant.username) {
-            console.warn("⚠️ Skipping student with missing username", occupant);
-            continue;
-          }
-
-          const occupantRef = roomRef.collection("occupants").doc(occupant.username);
-          await occupantRef.set({
-            email: occupant.email,
-            name: occupant.name,
-            username: occupant.username,
-            role: occupant.role,
-            remarks: occupant.remarks || [],
-          });
-
-          // Store students separately in a "students" collection
-          await db.collection("students").doc(occupant.username).set({
-            email: occupant.email,
-            name: occupant.name,
-            username: occupant.username,
-            role: occupant.role,
-            hostel: "BH1",
-            floor: floor.floor_id,
-            room_num: room.room_num,
-            remarks: occupant.remarks || [],
-          });
-        }
-      }
+      await roomRef.set({
+        occupants: admin.firestore.FieldValue.arrayUnion(studentId)
+      }, { merge: true });
     }
 
     console.log("✅ Data uploaded successfully!");
   } catch (error) {
     console.error("❌ Error uploading data:", error);
+    throw error;
   }
 }
 
