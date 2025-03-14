@@ -1,0 +1,173 @@
+{
+  "roles": {
+    "chief_warden": {
+      "CW001": {
+        "fullName": "Dr. Rajesh Kumar",
+        "email": "rajesh.kumar@smit.smu.edu.in",
+        "phoneNumber": "+91-9876543210",
+        "role": "chief_warden",
+        "accessLevel": "all"
+      },
+      "CW002": {
+        "fullName": "Mrs. Diya Kumari",
+        "email": "diya.kumari@smit.smu.edu.in",
+        "phoneNumber": "+91-9876543210",
+        "role": "chief_warden",
+        "accessLevel": "all"
+      }
+    },
+    "supervisors": {
+      "SV001": {
+        "fullName": "Dr. Amit Singh",
+        "email": "amit.singh@smit.smu.edu.in",
+        "phoneNumber": "+91-9876543211",
+        "role": "supervisor",
+        "assignedHostels": ["BH1", "BH2"],
+        "reportsTo": "CW001"
+      },
+      "SV002": {
+        "fullName": "Dr. Priya Sharma",
+        "email": "priya.sharma@university.edu",
+        "phoneNumber": "+91-9876543212",
+        "role": "supervisor",
+        "assignedHostels": ["GH3", "GH4"],
+        "reportsTo": "CW002"
+      }
+    },
+    "hostel_wardens": {
+      "HW001": {
+        "fullName": "Mr. Suresh Patel",
+        "email": "suresh.patel@university.edu",
+        "phoneNumber": "+91-9876543213",
+        "role": "hostel_warden",
+        "assignedHostel": "BH1",
+        "reportsTo": "SV001"
+      },
+      "HW002": {
+        "fullName": "Mrs. Meena Gupta",
+        "email": "meena.gupta@university.edu",
+        "phoneNumber": "+91-9876543214",
+        "role": "hostel_warden",
+        "assignedHostel": "GH3",
+        "reportsTo": "SV002"
+      }
+    },
+    "floor_wardens": {
+      "FW001": {
+        "fullName": "Dr. Ramesh Verma",
+        "email": "ramesh.verma@university.edu",
+        "phoneNumber": "+91-9876543215",
+        "role": "floor_warden",
+        "assignedHostel": "BH1",
+        "assignedFloors": ["1", "2", "3"],
+        "reportsTo": "HW001"
+      }
+    },
+    "floor_attendants": {
+      "FA001": {
+        "fullName": "Mr. Rakesh Kumar",
+        "email": "rakesh.kumar@university.edu",
+        "phoneNumber": "+91-9876543216",
+        "role": "floor_attendant",
+        "assignedHostel": "BH1",
+        "assignedFloors": ["1", "2"],
+        "reportsTo": "FW001"
+      }
+    }
+  },
+  "hostels": {
+    "BH1": {
+      "name": "Boys Hostel 1",
+      "warden": "HW001",
+      "supervisor": "SV001",
+      "totalFloors": 4,
+      "totalRooms": 100,
+      "floors": {
+        "1": {
+          "floorWarden": "FW001",
+          "floorAttendant": "FA001",
+          "rooms": ["101", "102", "103"]
+        }
+      }
+    }
+  },
+  "students": {
+    "ST001": {
+      "fullName": "Rahul Sharma",
+      "firstName": "Rahul",
+      "lastName": "Sharma",
+      "age": 20,
+      "phoneNumber": "+91-9876543217",
+      "email": "rahul.sharma@university.edu",
+      "registrationNumber": 202216001,
+      "parentsName": {
+        "father": "Mr. Rajesh Sharma",
+        "mother": "Mrs. Sunita Sharma"
+      },
+      "course": "Bachelor of Computer Applications",
+      "permanentAddress": {
+        "street": "123 Main Street",
+        "city": "New Delhi",
+        "state": "Delhi",
+        "pincode": "110001"
+      },
+      "hostelDetails": {
+        "hostel": "BH1",
+        "roomNumber": "101",
+        "floor": "1"
+      },
+      "roommateDetails": {
+        "roommateId": "ST002",
+        "roommateName": "Amit Patel"
+      },
+      "remarks": [
+        {
+          "date": "2024-01-15",
+          "dot": true,
+          "comment": "Late entry to hostel",
+          "reportedBy": "FA001"
+        }
+      ],
+      "issues": [
+        {
+          "type": "maintenance",
+          "date": "2024-01-10",
+          "message": "Fan not working properly",
+          "isSolved": false,
+          "reportedTo": "FA001"
+        }
+      ]
+    },
+    "ST002": {
+      "fullName": "Amit Patel",
+      "firstName": "Amit",
+      "lastName": "Patel",
+      "age": 19,
+      "phoneNumber": "+91-9876543218",
+      "email": "amit.patel@university.edu",
+      "registrationNumber": 202216002,
+      "parentsName": {
+        "father": "Mr. Suresh Patel",
+        "mother": "Mrs. Priya Patel"
+      },
+      "course": "Bachelor of Computer Applications",
+      "permanentAddress": {
+        "street": "456 Park Road",
+        "city": "Mumbai",
+        "state": "Maharashtra",
+        "pincode": "400001"
+      },
+      "hostelDetails": {
+        "hostel": "BH1",
+        "roomNumber": "101",
+        "floor": "1"
+      },
+      "roommateDetails": {
+        "roommateId": "ST001",
+        "roommateName": "Rahul Sharma"
+      },
+      "remarks": [],
+      "issues": []
+    }
+  }
+}
