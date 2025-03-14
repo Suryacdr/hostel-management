@@ -199,10 +199,12 @@ Once authentication and authorization checks pass, the middleware **enriches the
 
 | **User Role**  | **Can Access**                        | **Cannot Access** |
 |---------------|------------------------------------------------|-----------------------------|
-| **Super Admin** | Admin dashboards, all hostel settings, user management | N/A |
-| **Admin**      | Own hostel settings, Co-admin management | Other hostel admins' settings |
-| **Co-Admin**   | Assigned floors, room allocations | Other hostel floors, admin settings |
-| **Student**    | View room details, raise complaints | Manage users, allocate rooms |
+| **Chief Warden** | All dashboards (chief-warden, supervisor, hostel-warden, floor-warden, floor-attendant, student) | N/A |
+| **Supervisor**  | Supervisor, hostel-warden, floor-warden, floor-attendant, and student dashboards | Chief warden dashboard |
+| **Hostel Warden** | Hostel-warden, floor-warden, floor-attendant, and student dashboards | Chief warden and supervisor dashboards |
+| **Floor Warden** | Floor-warden, floor-attendant, and student dashboards | Chief warden, supervisor, and hostel-warden dashboards |
+| **Floor Attendant** | Floor-attendant and student dashboards | Chief warden, supervisor, hostel-warden, and floor-warden dashboards |
+| **Student**    | Student dashboard only | All administrative dashboards |
 
 ---
 
