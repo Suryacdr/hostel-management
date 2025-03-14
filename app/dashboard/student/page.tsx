@@ -4,6 +4,8 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import Image from "next/image";
 import { LogOut, Menu, User } from "lucide-react";
 import React from "react";
+import { auth } from "@/lib/firebase";
+import { signOut } from "firebase/auth";
 
 interface Post {
   id: number;
@@ -15,18 +17,42 @@ interface Post {
   solved: boolean;
 }
 
+interface StudentData {
+  name: string;
+  id: string;
+  email: string;
+  course: string;
+  department: string;
+  room: string;
+}
+
 export default function StudentDashboard() {
   const [postContent, setPostContent] = React.useState<string>("");
   const [selectedTag, setSelectedTag] = React.useState<
     "Complaint" | "Maintenance" | ""
   >("");
   const [posts, setPosts] = React.useState<Post[]>([]);
+  const [studentData, setStudentData] = React.useState<StudentData | null>(
+    null
+  );
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
+
+  const handleSignOut = () => {
+    signOut(auth)
+      .then(() => {
+        alert("Signed out successfully");
+        window.location.href = "/";
+      })
+      .catch((error) => {
+        console.error("Error signing out:", error);
+      });
+  };
 
   const handleMenuOpen = () => {
     setIsMenuOpen(!isMenuOpen);
   };
+
   // Close menu when clicking outside
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -34,11 +60,12 @@ export default function StudentDashboard() {
         setIsMenuOpen(false);
       }
     };
-  document.addEventListener("mousedown", handleClickOutside);
-  return () => {
-    document.removeEventListener("mousedown", handleClickOutside);
-  };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
   }, []);
+
   const handlePost = () => {
     if (postContent.trim() === "" || selectedTag === "") return;
 
@@ -47,7 +74,7 @@ export default function StudentDashboard() {
       content: postContent,
       tag: selectedTag as "Complaint" | "Maintenance",
       timestamp: new Date(),
-      author: "Grenish Rai",
+      author: studentData?.name || "Error",
       likes: 0,
       solved: false,
     };
@@ -57,9 +84,68 @@ export default function StudentDashboard() {
     setSelectedTag("");
   };
 
+  // Fetch student data from the API
+  React.useEffect(() => {
+    const fetchStudentData = async () => {
+      try {
+        // Get the current user
+        const user = auth.currentUser;
+        if (!user) {
+          console.log("No user logged in");
+          return;
+        }
+
+        // Get a fresh token
+        const token = await user.getIdToken(true);
+        console.log("Token obtained successfully");
+
+        const response = await fetch("/api/fetch", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error("API Error:", errorData);
+          throw new Error(errorData.error || "Failed to fetch student data");
+        }
+
+        const data = await response.json();
+        console.log("Received data:", data);
+
+        // Update student data
+        setStudentData(data.student);
+
+        // Convert timestamps to Date objects if they're not already
+        const formattedPosts = (data.posts || []).map((post: any) => ({
+          ...post,
+          timestamp:
+            post.timestamp instanceof Date
+              ? post.timestamp
+              : new Date(post.timestamp),
+        }));
+
+        setPosts(formattedPosts);
+      } catch (error) {
+        console.error("Error fetching student data:", error);
+      }
+    };
+
+    // Check if user is logged in before fetching data
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (user) {
+        fetchStudentData();
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-slate-950 dark:text-white">
-      {/* profile section remains unchanged */}
       <div className="bg-white dark:bg-slate-900 shadow-md rounded-b-3xl mb-6">
         <div className="max-w-6xl mx-auto p-6 flex items-start gap-8">
           <div className="w-40 h-40 rounded-full overflow-hidden ring-4 ring-gray-100 dark:ring-slate-800 flex-shrink-0">
@@ -74,12 +160,14 @@ export default function StudentDashboard() {
           <div className="flex-1">
             <div className="flex justify-between items-start">
               <div>
-                <h2 className="text-2xl font-bold">Grenish Rai</h2>
+                <h2 className="text-2xl font-bold">
+                  {studentData?.name || ""}
+                </h2>
                 <h3 className="text-lg text-gray-600 dark:text-gray-400">
-                  202216052
+                  {studentData?.id || ""}
                 </h3>
                 <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
-                  grenish_202216052@smit.smu.edu.in
+                  {studentData?.email || ""}
                 </p>
               </div>
               <div className="flex items-center gap-3 relative">
@@ -91,7 +179,7 @@ export default function StudentDashboard() {
                   <Menu size={20} />
                 </button>
                 {isMenuOpen && (
-                  <div 
+                  <div
                     ref={menuRef}
                     className="w-[180px] p-2 absolute bg-white dark:bg-slate-800 top-12 right-0 rounded-xl shadow-lg border border-gray-100 dark:border-slate-700 flex flex-col gap-2 z-50"
                   >
@@ -99,7 +187,7 @@ export default function StudentDashboard() {
                       <User size={18} />
                       <span className="text-sm font-medium">Edit Profile</span>
                     </button>
-                    <button className="inline-flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg text-red-500 transition-colors">
+                    <button onClick={handleSignOut} className="inline-flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg text-red-500 transition-colors">
                       <LogOut size={18} />
                       <span className="text-sm font-medium">Logout</span>
                     </button>
@@ -110,17 +198,23 @@ export default function StudentDashboard() {
 
             <div className="flex gap-4 mt-6">
               <div className="bg-gray-100 dark:bg-slate-800 p-3 rounded-xl text-center flex-1 shadow-sm">
-                <p className="text-xl font-semibold">BCA</p>
+                <p className="text-xl font-semibold">
+                  {studentData?.course || ""}
+                </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   Course
                 </p>
               </div>
               <div className="bg-gray-100 dark:bg-slate-800 p-3 rounded-xl text-center flex-1 shadow-sm">
-                <p className="text-xl font-semibold">CA</p>
+                <p className="text-xl font-semibold">
+                  {studentData?.department || ""}
+                </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Dept</p>
               </div>
               <div className="bg-gray-100 dark:bg-slate-800 p-3 rounded-xl text-center flex-1 shadow-sm">
-                <p className="text-xl font-semibold">Q-502</p>
+                <p className="text-xl font-semibold">
+                  {studentData?.room || ""}
+                </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Room</p>
               </div>
             </div>
@@ -129,7 +223,6 @@ export default function StudentDashboard() {
       </div>
 
       <div className="flex-1 max-w-4xl w-full mx-auto px-4 pb-8">
-        {/* feed */}
         <div className="w-full">
           <div className="space-y-6">
             <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm">
@@ -178,7 +271,6 @@ export default function StudentDashboard() {
                 </button>
               </div>
             </div>
-            {/* Dynamic posts section */}
             {posts.length > 0 ? (
               posts.map((post) => <MessageBox key={post.id} post={post} />)
             ) : (
