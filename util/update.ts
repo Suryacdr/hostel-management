@@ -19,6 +19,7 @@ interface User {
     email: string;
     phoneNumber: string;
     role: "chief_warden" | "supervisor" | "hostel_warden" | "floor_warden" | "floor_attendant" | "student";
+    profilePictureUrl: string; // Added profilePictureUrl
 }
 
 interface ChiefWarden extends User {
