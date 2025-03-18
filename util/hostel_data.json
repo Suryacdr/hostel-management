@@ -6,14 +6,16 @@
         "email": "rajesh.kumar@smit.smu.edu.in",
         "phoneNumber": "+91-9876543210",
         "role": "chief_warden",
-        "accessLevel": "all"
+        "accessLevel": "all",
+        "profilePictureUrl": ""
       },
       "CW002": {
         "fullName": "Mrs. Diya Kumari",
         "email": "diya.kumari@smit.smu.edu.in",
         "phoneNumber": "+91-9876543210",
         "role": "chief_warden",
-        "accessLevel": "all"
+        "accessLevel": "all",
+        "profilePictureUrl": ""
       }
     },
     "supervisors": {
@@ -23,7 +25,8 @@
         "phoneNumber": "+91-9876543211",
         "role": "supervisor",
         "assignedHostels": ["BH1", "BH2"],
-        "reportsTo": "CW001"
+        "reportsTo": "CW001",
+        "profilePictureUrl": ""
       },
       "SV002": {
         "fullName": "Dr. Priya Sharma",
@@ -31,7 +34,8 @@
         "phoneNumber": "+91-9876543212",
         "role": "supervisor",
         "assignedHostels": ["GH3", "GH4"],
-        "reportsTo": "CW002"
+        "reportsTo": "CW002",
+        "profilePictureUrl": ""
       }
     },
     "hostel_wardens": {
@@ -41,7 +45,8 @@
         "phoneNumber": "+91-9876543213",
         "role": "hostel_warden",
         "assignedHostel": "BH1",
-        "reportsTo": "SV001"
+        "reportsTo": "SV001",
+        "profilePictureUrl": ""
       },
       "HW002": {
         "fullName": "Mrs. Meena Gupta",
@@ -49,7 +54,8 @@
         "phoneNumber": "+91-9876543214",
         "role": "hostel_warden",
         "assignedHostel": "GH3",
-        "reportsTo": "SV002"
+        "reportsTo": "SV002",
+        "profilePictureUrl": ""
       }
     },
     "floor_wardens": {
@@ -60,7 +66,8 @@
         "role": "floor_warden",
         "assignedHostel": "BH1",
         "assignedFloors": ["1", "2", "3"],
-        "reportsTo": "HW001"
+        "reportsTo": "HW001",
+        "profilePictureUrl": ""
       }
     },
     "floor_attendants": {
@@ -71,7 +78,8 @@
         "role": "floor_attendant",
         "assignedHostel": "BH1",
         "assignedFloors": ["1", "2"],
-        "reportsTo": "FW001"
+        "reportsTo": "FW001",
+        "profilePictureUrl": ""
       }
     }
   },
@@ -120,39 +128,10 @@
         "roommateId": "ST002",
         "roommateName": "Amit Patel"
       },
-      "remarks": [
-        {
-          "date": "2024-01-15",
-          "type": "attendance",
-          "comment": "Late entry to hostel",
-          "reportedBy": "FA001",
-          "time": "22:45",
-          "status": "pending"
-        }
-      ],
-      "complaints": [
-        {
-          "id": "C001",
-          "date": "2024-01-12",
-          "time": "14:30",
-          "message": "Roommate playing loud music during study hours",
-          "status": "pending",
-          "reportedTo": "FW001",
-          "priority": "medium"
-        }
-      ],
-      "maintenance": [
-        {
-          "id": "M001",
-          "date": "2024-01-10",
-          "time": "09:15",
-          "message": "Fan not working properly",
-          "status": "pending",
-          "reportedTo": "FA001",
-          "priority": "high",
-          "estimatedCompletionDate": "2024-01-17"
-        }
-      ]
+      "remarks": [],
+      "complaints": [],
+      "maintenance": [],
+      "profilePictureUrl": ""
     },
     "ST002": {
       "fullName": "Amit Patel",
@@ -183,40 +162,75 @@
         "roommateName": "Rahul Sharma"
       },
       "remarks": [],
-      "complaints": [
-        {
-          "id": "C002",
-          "date": "2024-01-14",
-          "time": "18:45",
-          "message": "Water leakage from ceiling during rain",
-          "status": "in-progress",
-          "reportedTo": "HW001",
-          "priority": "high",
-          "assignedTo": "FA001"
-        }
-      ],
-      "maintenance": [
-        {
-          "id": "M002",
-          "date": "2024-01-08",
-          "time": "11:20",
-          "message": "Bathroom tap is leaking",
-          "status": "completed",
-          "reportedTo": "FA001",
-          "priority": "medium",
-          "completedDate": "2024-01-11",
-          "completedBy": "Maintenance Staff"
-        },
-        {
-          "id": "M003",
-          "date": "2024-01-16",
-          "time": "16:30",
-          "message": "Light bulb in study area needs replacement",
-          "status": "pending",
-          "reportedTo": "FA001",
-          "priority": "low"
-        }
-      ]
+      "complaints": [],
+      "maintenance": [],
+      "profilePictureUrl": ""
+    },
+    "ST003": {
+      "fullName": "Neha Verma",
+      "firstName": "Neha",
+      "lastName": "Verma",
+      "age": 21,
+      "phoneNumber": "+91-9876543219",
+      "email": "neha.verma@university.edu",
+      "registrationNumber": 202216003,
+      "parentsName": {
+        "father": "Mr. Anil Verma",
+        "mother": "Mrs. Kavita Verma"
+      },
+      "course": "Bachelor of Science",
+      "permanentAddress": {
+        "street": "789 Hill Road",
+        "city": "Bangalore",
+        "state": "Karnataka",
+        "pincode": "560001"
+      },
+      "hostelDetails": {
+        "hostel": "GH3",
+        "roomNumber": "201",
+        "floor": "2"
+      },
+      "roommateDetails": {
+        "roommateId": "ST004",
+        "roommateName": "Pooja Singh"
+      },
+      "remarks": [],
+      "complaints": [],
+      "maintenance": [],
+      "profilePictureUrl": ""
+    },
+    "ST004": {
+      "fullName": "Pooja Singh",
+      "firstName": "Pooja",
+      "lastName": "Singh",
+      "age": 22,
+      "phoneNumber": "+91-9876543220",
+      "email": "pooja.singh@university.edu",
+      "registrationNumber": 202216004,
+      "parentsName": {
+        "father": "Mr. Rakesh Singh",
+        "mother": "Mrs. Sunita Singh"
+      },
+      "course": "Bachelor of Arts",
+      "permanentAddress": {
+        "street": "123 Lake View",
+        "city": "Chennai",
+        "state": "Tamil Nadu",
+        "pincode": "600001"
+      },
+      "hostelDetails": {
+        "hostel": "GH3",
+        "roomNumber": "201",
+        "floor": "2"
+      },
+      "roommateDetails": {
+        "roommateId": "ST003",
+        "roommateName": "Neha Verma"
+      },
+      "remarks": [],
+      "complaints": [],
+      "maintenance": [],
+      "profilePictureUrl": ""
     }
   }
 }
