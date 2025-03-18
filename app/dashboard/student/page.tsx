@@ -37,6 +37,7 @@ export default function StudentDashboard() {
   );
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
 
   const handleSignOut = () => {
     signOut(auth)
@@ -66,27 +67,107 @@ export default function StudentDashboard() {
     };
   }, []);
 
-  const handlePost = () => {
-    if (postContent.trim() === "" || selectedTag === "") return;
+  const handlePost = async () => {
+    if (!postContent.trim() || !selectedTag) {
+      alert("Please fill in all fields.");
+      return;
+    }
 
-    const newPost: Post = {
-      id: Date.now(),
-      content: postContent,
-      tag: selectedTag as "Complaint" | "Maintenance",
-      timestamp: new Date(),
-      author: studentData?.name || "Error",
-      likes: 0,
-      solved: false,
-    };
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        alert("User not logged in.");
+        return;
+      }
 
-    setPosts([newPost, ...posts]);
-    setPostContent("");
-    setSelectedTag("");
+      const token = await user.getIdToken();
+      const response = await fetch("/api/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          content: postContent,
+          tag: selectedTag,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("API Error:", errorData);
+        alert(`Failed to create post: ${errorData.error || "Unknown error"}`);
+        return;
+      }
+
+      const data = await response.json();
+      console.log("Post created:", data);
+
+      // Fetch student data from the API
+      const fetchStudentData = async () => {
+        setIsLoading(true);
+        try {
+          // Get the current user
+          const user = auth.currentUser;
+          if (!user) {
+            console.log("No user logged in");
+            return;
+          }
+
+          // Get a fresh token
+          const token = await user.getIdToken(true);
+          console.log("Token obtained successfully");
+
+          const response = await fetch("/api/fetch", {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            console.error("API Error:", errorData);
+            throw new Error(errorData.error || "Failed to fetch student data");
+          }
+
+          const data = await response.json();
+          console.log("Received data:", data);
+
+          // Update student data
+          setStudentData(data.student);
+
+          // Convert timestamps to Date objects if they're not already
+          const formattedPosts = (data.posts || []).map((post: any) => ({
+            ...post,
+            timestamp:
+              post.timestamp instanceof Date
+                ? post.timestamp
+                : new Date(post.timestamp),
+          }));
+
+          setPosts(formattedPosts);
+        } catch (error) {
+          console.error("Error fetching student data:", error);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      fetchStudentData();
+
+      setPostContent("");
+      setSelectedTag("");
+    } catch (error) {
+      console.error("Error creating post:", error);
+      alert("An unexpected error occurred.");
+    }
   };
 
   // Fetch student data from the API
   React.useEffect(() => {
     const fetchStudentData = async () => {
+      setIsLoading(true);
       try {
         // Get the current user
         const user = auth.currentUser;
@@ -131,6 +212,8 @@ export default function StudentDashboard() {
         setPosts(formattedPosts);
       } catch (error) {
         console.error("Error fetching student data:", error);
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -138,6 +221,8 @@ export default function StudentDashboard() {
     const unsubscribe = auth.onAuthStateChanged((user) => {
       if (user) {
         fetchStudentData();
+      } else {
+        setIsLoading(false);
       }
     });
 
@@ -148,77 +233,86 @@ export default function StudentDashboard() {
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-slate-950 dark:text-white">
       <div className="bg-white dark:bg-slate-900 shadow-md rounded-b-3xl mb-6">
         <div className="max-w-6xl mx-auto p-6 flex items-start gap-8">
-          <div className="w-40 h-40 rounded-full overflow-hidden ring-4 ring-gray-100 dark:ring-slate-800 flex-shrink-0">
-            <Image
-              src={"/test.jpeg"}
-              width={200}
-              height={200}
-              alt="Profile"
-              className="object-cover w-full h-full"
-            />
-          </div>
-          <div className="flex-1">
-            <div className="flex justify-between items-start">
-              <div>
-                <h2 className="text-2xl font-bold">
-                  {studentData?.name || ""}
-                </h2>
-                <h3 className="text-lg text-gray-600 dark:text-gray-400">
-                  {studentData?.id || ""}
-                </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
-                  {studentData?.email || ""}
-                </p>
+          {isLoading ? (
+            <ProfileSkeleton />
+          ) : (
+            <>
+              <div className="w-40 h-40 rounded-full overflow-hidden ring-4 ring-gray-100 dark:ring-slate-800 flex-shrink-0">
+                <Image
+                  src={"/test.jpeg"}
+                  width={200}
+                  height={200}
+                  alt="Profile"
+                  className="object-cover w-full h-full"
+                />
               </div>
-              <div className="flex items-center gap-3 relative">
-                <ThemeToggle />
-                <button
-                  onClick={handleMenuOpen}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors"
-                >
-                  <Menu size={20} />
-                </button>
-                {isMenuOpen && (
-                  <div
-                    ref={menuRef}
-                    className="w-[180px] p-2 absolute bg-white dark:bg-slate-800 top-12 right-0 rounded-xl shadow-lg border border-gray-100 dark:border-slate-700 flex flex-col gap-2 z-50"
-                  >
-                    <button className="inline-flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg text-gray-700 dark:text-gray-200 transition-colors">
-                      <User size={18} />
-                      <span className="text-sm font-medium">Edit Profile</span>
-                    </button>
-                    <button onClick={handleSignOut} className="inline-flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg text-red-500 transition-colors">
-                      <LogOut size={18} />
-                      <span className="text-sm font-medium">Logout</span>
-                    </button>
+              <div className="flex-1">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h2 className="text-2xl font-bold">
+                      {studentData?.name || ""}
+                    </h2>
+                    <h3 className="text-lg text-gray-600 dark:text-gray-400">
+                      {studentData?.id || ""}
+                    </h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                      {studentData?.email || ""}
+                    </p>
                   </div>
-                )}
-              </div>
-            </div>
+                  <div className="flex items-center gap-3 relative">
+                    <ThemeToggle />
+                    <button
+                      onClick={handleMenuOpen}
+                      className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+                    >
+                      <Menu size={20} />
+                    </button>
+                    {isMenuOpen && (
+                      <div
+                        ref={menuRef}
+                        className="w-[180px] p-2 absolute bg-white dark:bg-slate-800 top-12 right-0 rounded-xl shadow-lg border border-gray-100 dark:border-slate-700 flex flex-col gap-2 z-50"
+                      >
+                        <button className="inline-flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg text-gray-700 dark:text-gray-200 transition-colors">
+                          <User size={18} />
+                          <span className="text-sm font-medium">Edit Profile</span>
+                        </button>
+                        <button
+                          onClick={handleSignOut}
+                          className="inline-flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg text-red-500 transition-colors"
+                        >
+                          <LogOut size={18} />
+                          <span className="text-sm font-medium">Logout</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-            <div className="flex gap-4 mt-6">
-              <div className="bg-gray-100 dark:bg-slate-800 p-3 rounded-xl text-center flex-1 shadow-sm">
-                <p className="text-xl font-semibold">
-                  {studentData?.course || ""}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Course
-                </p>
+                <div className="flex gap-4 mt-6">
+                  <div className="bg-gray-100 dark:bg-slate-800 p-3 rounded-xl text-center flex-1 shadow-sm">
+                    <p className="text-xl font-semibold">
+                      {studentData?.course || ""}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Course
+                    </p>
+                  </div>
+                  <div className="bg-gray-100 dark:bg-slate-800 p-3 rounded-xl text-center flex-1 shadow-sm">
+                    <p className="text-xl font-semibold">
+                      {studentData?.department || ""}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Dept</p>
+                  </div>
+                  <div className="bg-gray-100 dark:bg-slate-800 p-3 rounded-xl text-center flex-1 shadow-sm">
+                    <p className="text-xl font-semibold">
+                      {studentData?.room || ""}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Room</p>
+                  </div>
+                </div>
               </div>
-              <div className="bg-gray-100 dark:bg-slate-800 p-3 rounded-xl text-center flex-1 shadow-sm">
-                <p className="text-xl font-semibold">
-                  {studentData?.department || ""}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Dept</p>
-              </div>
-              <div className="bg-gray-100 dark:bg-slate-800 p-3 rounded-xl text-center flex-1 shadow-sm">
-                <p className="text-xl font-semibold">
-                  {studentData?.room || ""}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Room</p>
-              </div>
-            </div>
-          </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -271,7 +365,14 @@ export default function StudentDashboard() {
                 </button>
               </div>
             </div>
-            {posts.length > 0 ? (
+            
+            {isLoading ? (
+              <>
+                <MessageSkeleton />
+                <MessageSkeleton />
+                <MessageSkeleton />
+              </>
+            ) : posts.length > 0 ? (
               posts.map((post) => <MessageBox key={post.id} post={post} />)
             ) : (
               <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm text-center">
@@ -289,6 +390,62 @@ export default function StudentDashboard() {
     </div>
   );
 }
+
+// Profile skeleton component
+const ProfileSkeleton = () => {
+  return (
+    <>
+      <div className="w-40 h-40 rounded-full bg-gray-200 dark:bg-slate-800 flex-shrink-0 animate-pulse"></div>
+      <div className="flex-1">
+        <div className="flex justify-between items-start">
+          <div className="space-y-2">
+            <div className="h-7 w-48 bg-gray-200 dark:bg-slate-800 rounded-md animate-pulse"></div>
+            <div className="h-6 w-32 bg-gray-200 dark:bg-slate-800 rounded-md animate-pulse"></div>
+            <div className="h-5 w-56 bg-gray-200 dark:bg-slate-800 rounded-md animate-pulse"></div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gray-200 dark:bg-slate-800 rounded-full animate-pulse"></div>
+          </div>
+        </div>
+
+        <div className="flex gap-4 mt-6">
+          <div className="bg-gray-200 dark:bg-slate-800 p-3 rounded-xl text-center flex-1 animate-pulse h-16"></div>
+          <div className="bg-gray-200 dark:bg-slate-800 p-3 rounded-xl text-center flex-1 animate-pulse h-16"></div>
+          <div className="bg-gray-200 dark:bg-slate-800 p-3 rounded-xl text-center flex-1 animate-pulse h-16"></div>
+        </div>
+      </div>
+    </>
+  );
+};
+
+// Message skeleton component
+const MessageSkeleton = () => {
+  return (
+    <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm animate-pulse">
+      <div className="flex items-center gap-3">
+        <div className="w-12 h-12 bg-gray-200 dark:bg-slate-800 rounded-full"></div>
+        <div>
+          <div className="h-5 w-32 bg-gray-200 dark:bg-slate-800 rounded-md"></div>
+          <div className="h-3 w-24 bg-gray-200 dark:bg-slate-800 rounded-md mt-2"></div>
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <div className="h-4 w-full bg-gray-200 dark:bg-slate-800 rounded-md"></div>
+        <div className="h-4 w-5/6 bg-gray-200 dark:bg-slate-800 rounded-md mt-2"></div>
+        <div className="h-4 w-4/6 bg-gray-200 dark:bg-slate-800 rounded-md mt-2"></div>
+
+        <div className="mt-4 pt-3 flex items-center justify-between border-t border-gray-100 dark:border-slate-800">
+          <div className="h-6 w-20 bg-gray-200 dark:bg-slate-800 rounded-full"></div>
+          <div className="flex items-center gap-3">
+            <div className="h-6 w-10 bg-gray-200 dark:bg-slate-800 rounded-md"></div>
+            <div className="h-6 w-24 bg-gray-200 dark:bg-slate-800 rounded-full"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // Props interface for MessageBox
 interface MessageBoxProps {
