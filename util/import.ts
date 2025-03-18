@@ -82,6 +82,7 @@ interface Student extends User {
   roommateDetails: RoommateDetails;
   remarks: Remark[];
   issues: Issue[];
+  profilePictureUrl: string;
 }
 
 interface Remark {
