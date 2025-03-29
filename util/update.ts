@@ -86,6 +86,14 @@ interface Issue {
     reportedTo: string;
 }
 
+interface Bucket {
+    name: string;
+    updatedOn: string;
+    createdAt: string;
+    createdBy: string;
+    files: string[];    
+}
+
 interface Student extends User {
     firstName: string;
     lastName: string;
@@ -98,6 +106,7 @@ interface Student extends User {
     roommateDetails: RoommateDetails;
     remarks: Remark[];
     issues: Issue[];
+    bucket: Bucket[];
 }
 
 interface HostelFloor {
@@ -194,6 +203,15 @@ async function updateData() {
                 occupants: admin.firestore.FieldValue.arrayUnion(studentId)
             });
             console.log(`✅ Added student ${studentId} to room ${roomNumber}`);
+
+            // Update student's bucket data
+            if (studentData.bucket && studentData.bucket.length > 0) {
+                for (const bucket of studentData.bucket) {
+                    const bucketRef = studentRef.collection("buckets").doc(bucket.name);
+                    await bucketRef.set(bucket, { merge: true });
+                    console.log(`✅ Updated bucket: ${bucket.name} for student: ${studentId}`);
+                }
+            }
         }
 
         console.log("✅ Firestore updated successfully!");
