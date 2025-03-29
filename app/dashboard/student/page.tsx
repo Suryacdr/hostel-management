@@ -2,10 +2,11 @@
 
 import { ThemeToggle } from "@/components/ThemeToggle";
 import Image from "next/image";
-import { LogOut, Menu, User } from "lucide-react";
+import { LogOut, Menu, User, X } from "lucide-react";
 import React from "react";
 import { auth } from "@/lib/firebase";
-import { signOut } from "firebase/auth";
+import { signOut, updatePassword, updateProfile } from "firebase/auth";
+import ProfileImageUploader from "@/components/ProfileImageUploader";
 
 interface Post {
   id: number;
@@ -24,6 +25,7 @@ interface StudentData {
   course: string;
   department: string;
   room: string;
+  profilePictureUrl: string;
 }
 
 export default function StudentDashboard() {
@@ -38,6 +40,14 @@ export default function StudentDashboard() {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const [firstName, setFirstName] = React.useState("");
+  const [lastName, setLastName] = React.useState("");
+  const [newPassword, setNewPassword] = React.useState("");
+  const [confirmPassword, setConfirmPassword] = React.useState("");
+  const [imageFile, setImageFile] = React.useState<File | null>(null);
+  const [previewImage, setPreviewImage] = React.useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleSignOut = () => {
     signOut(auth)
@@ -54,7 +64,269 @@ export default function StudentDashboard() {
     setIsMenuOpen(!isMenuOpen);
   };
 
-  // Close menu when clicking outside
+  // Open the edit profile modal
+  const handleOpenEditModal = () => {
+    if (studentData) {
+      const nameParts = studentData.name.split(" ");
+      setFirstName(nameParts[0] || "");
+      setLastName(nameParts.slice(1).join(" ") || "");
+    }
+    setIsModalOpen(true);
+    setIsMenuOpen(false);
+  };
+
+  // Close the modal and reset form
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setNewPassword("");
+    setConfirmPassword("");
+    setImageFile(null);
+    setPreviewImage(null);
+  };
+
+  // Handle when an image is successfully uploaded via the ProfileImageUploader
+  const handleImageUploaded = async (imageUrl: string) => {
+    if (auth.currentUser) {
+      console.log("Image uploaded, updating profile with URL:", imageUrl);
+
+      // Update Firebase Auth profile with photo URL
+      await updateProfile(auth.currentUser, {
+        photoURL: imageUrl,
+      });
+
+      // If there's student data available, update it locally
+      if (studentData) {
+        console.log("Updating local student data with new profile image");
+        setStudentData({
+          ...studentData,
+          profilePictureUrl: imageUrl,
+        });
+      }
+
+      // Force a refresh of the student data from the server
+      fetchStudentData();
+    }
+  };
+
+  // Extract fetchStudentData to a separate function to reuse it
+  const fetchStudentData = async () => {
+    setIsLoading(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        console.log("No user logged in");
+        return;
+      }
+
+      const token = await user.getIdToken(true);
+      console.log("Token obtained successfully");
+
+      const response = await fetch("/api/fetch", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("API Error:", errorData);
+        throw new Error(errorData.error || "Failed to fetch student data");
+      }
+
+      const data = await response.json();
+      console.log("Received data:", data);
+
+      setStudentData(data.student);
+      console.log("Updated student data with profile picture:", data.student.profilePictureUrl);
+
+      const complaintsArray = Array.isArray(data.complaints)
+        ? data.complaints
+        : [];
+      const maintenanceArray = Array.isArray(data.maintenance)
+        ? data.maintenance
+        : [];
+
+      const formattedComplaints = complaintsArray.map((complaint: any) => ({
+        id: complaint.id,
+        content: complaint.message,
+        tag: "Complaint" as const,
+        timestamp: new Date(complaint.timestamp),
+        author: data.student?.name || "You",
+        likes: complaint.likes || 0,
+        solved: complaint.solved || false,
+      }));
+
+      const formattedMaintenance = maintenanceArray.map(
+        (maintenance: any) => ({
+          id: maintenance.id,
+          content: maintenance.message,
+          tag: "Maintenance" as const,
+          timestamp: new Date(maintenance.timestamp),
+          author: data.student?.name || "You",
+          likes: maintenance.likes || 0,
+          solved: maintenance.solved || false,
+        })
+      );
+
+      const allPosts = [...formattedComplaints, ...formattedMaintenance].sort(
+        (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
+      );
+
+      setPosts(allPosts);
+      console.log("Posts loaded:", allPosts.length);
+    } catch (error) {
+      console.error("Error fetching student data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Helper function to complete profile update
+  const completeProfileUpdate = async (
+    updateData: Record<string, any>,
+    user: any
+  ) => {
+    // Make API call if there are any fields to update
+    if (Object.keys(updateData).length > 0) {
+      console.log("Sending update data to API:", updateData);
+
+      try {
+        const token = await user.getIdToken(true);
+        const response = await fetch("/api/update", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(updateData),
+        });
+
+        // Check if the response is ok before trying to parse it
+        if (!response.ok) {
+          // Try to get error details if available
+          let errorMsg = `Server responded with status: ${response.status}`;
+          try {
+            const errorData = await response.json();
+            errorMsg = errorData.error || errorMsg;
+          } catch (parseError) {
+            // If we can't parse the error response, use the status text
+            errorMsg = response.statusText || errorMsg;
+          }
+          throw new Error(errorMsg);
+        }
+
+        // Make sure the response has content before parsing
+        const text = await response.text();
+        if (!text) {
+          console.log("Server returned empty response");
+          // Continue instead of throwing, since the update might still have succeeded
+        } else {
+          // Parse JSON only if there's content
+          const result = JSON.parse(text);
+          console.log("Profile update result:", result);
+        }
+      } catch (fetchError) {
+        console.error("API request error:", fetchError);
+        const errorMessage =
+          fetchError instanceof Error ? fetchError.message : "Unknown error";
+        throw new Error(`Failed to update profile: ${errorMessage}`);
+      }
+    } else {
+      console.log("No fields to update in the database");
+    }
+  };
+
+  // Handle profile update submission
+  const handleProfileUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        alert("User not logged in.");
+        return;
+      }
+
+      if (newPassword) {
+        if (newPassword !== confirmPassword) {
+          alert("Passwords don't match.");
+          return;
+        }
+        if (newPassword.length < 8) {
+          alert("Password should be at least 8 characters.");
+          return;
+        }
+      }
+
+      setIsLoading(true);
+
+      // Update data object to send to the API
+      const updateData: Record<string, any> = {};
+
+      // Add name to update data if changed
+      const fullName = `${firstName} ${lastName}`.trim();
+      if (fullName && fullName !== studentData?.name) {
+        updateData.name = fullName;
+
+        // Update Firebase Auth profile
+        await updateProfile(user, { displayName: fullName });
+      }
+
+      // Update password if provided
+      if (newPassword) {
+        await updatePassword(user, newPassword);
+      }
+
+      // Make API call if there are any fields to update
+      if (Object.keys(updateData).length > 0) {
+        await completeProfileUpdate(updateData, user);
+      }
+
+      // Always refresh student data after update attempts
+      if (user) {
+        const token = await user.getIdToken(true);
+        const response = await fetch("/api/fetch", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(
+            errorData.error || "Failed to fetch updated profile data"
+          );
+        }
+
+        const data = await response.json();
+
+        // Update local state with the fresh data
+        setStudentData(data.student);
+
+        // Reset form state
+        if (data.student) {
+          const nameParts = data.student.name.split(" ");
+          setFirstName(nameParts[0] || "");
+          setLastName(nameParts.slice(1).join(" ") || "");
+        }
+      }
+
+      alert("Profile updated successfully!");
+      handleCloseModal();
+    } catch (error: any) {
+      console.error("Error updating profile:", error);
+      alert(
+        `Failed to update profile: ${error.message || "Try logging in again."}`
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -65,6 +337,18 @@ export default function StudentDashboard() {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
+  }, []);
+
+  React.useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (user) {
+        fetchStudentData();
+      } else {
+        setIsLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const handlePost = async () => {
@@ -103,57 +387,6 @@ export default function StudentDashboard() {
       const data = await response.json();
       console.log("Post created:", data);
 
-      // Fetch student data from the API
-      const fetchStudentData = async () => {
-        setIsLoading(true);
-        try {
-          // Get the current user
-          const user = auth.currentUser;
-          if (!user) {
-            console.log("No user logged in");
-            return;
-          }
-
-          // Get a fresh token
-          const token = await user.getIdToken(true);
-          console.log("Token obtained successfully");
-
-          const response = await fetch("/api/fetch", {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          });
-
-          if (!response.ok) {
-            const errorData = await response.json();
-            console.error("API Error:", errorData);
-            throw new Error(errorData.error || "Failed to fetch student data");
-          }
-
-          const data = await response.json();
-          console.log("Received data:", data);
-
-          // Update student data
-          setStudentData(data.student);
-
-          // Convert timestamps to Date objects if they're not already
-          const formattedPosts = (data.posts || []).map((post: any) => ({
-            ...post,
-            timestamp:
-              post.timestamp instanceof Date
-                ? post.timestamp
-                : new Date(post.timestamp),
-          }));
-
-          setPosts(formattedPosts);
-        } catch (error) {
-          console.error("Error fetching student data:", error);
-        } finally {
-          setIsLoading(false);
-        }
-      };
       fetchStudentData();
 
       setPostContent("");
@@ -163,71 +396,6 @@ export default function StudentDashboard() {
       alert("An unexpected error occurred.");
     }
   };
-
-  // Fetch student data from the API
-  React.useEffect(() => {
-    const fetchStudentData = async () => {
-      setIsLoading(true);
-      try {
-        // Get the current user
-        const user = auth.currentUser;
-        if (!user) {
-          console.log("No user logged in");
-          return;
-        }
-
-        // Get a fresh token
-        const token = await user.getIdToken(true);
-        console.log("Token obtained successfully");
-
-        const response = await fetch("/api/fetch", {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error("API Error:", errorData);
-          throw new Error(errorData.error || "Failed to fetch student data");
-        }
-
-        const data = await response.json();
-        console.log("Received data:", data);
-
-        // Update student data
-        setStudentData(data.student);
-
-        // Convert timestamps to Date objects if they're not already
-        const formattedPosts = (data.posts || []).map((post: any) => ({
-          ...post,
-          timestamp:
-            post.timestamp instanceof Date
-              ? post.timestamp
-              : new Date(post.timestamp),
-        }));
-
-        setPosts(formattedPosts);
-      } catch (error) {
-        console.error("Error fetching student data:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    // Check if user is logged in before fetching data
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (user) {
-        fetchStudentData();
-      } else {
-        setIsLoading(false);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-slate-950 dark:text-white">
@@ -239,7 +407,7 @@ export default function StudentDashboard() {
             <>
               <div className="w-40 h-40 rounded-full overflow-hidden ring-4 ring-gray-100 dark:ring-slate-800 flex-shrink-0">
                 <Image
-                  src={"/test.jpeg"}
+                  src={studentData?.profilePictureUrl || "/boy.png"}
                   width={200}
                   height={200}
                   alt="Profile"
@@ -272,9 +440,14 @@ export default function StudentDashboard() {
                         ref={menuRef}
                         className="w-[180px] p-2 absolute bg-white dark:bg-slate-800 top-12 right-0 rounded-xl shadow-lg border border-gray-100 dark:border-slate-700 flex flex-col gap-2 z-50"
                       >
-                        <button className="inline-flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg text-gray-700 dark:text-gray-200 transition-colors">
+                        <button
+                          className="inline-flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg text-gray-700 dark:text-gray-200 transition-colors"
+                          onClick={handleOpenEditModal}
+                        >
                           <User size={18} />
-                          <span className="text-sm font-medium">Edit Profile</span>
+                          <span className="text-sm font-medium">
+                            Edit Profile
+                          </span>
                         </button>
                         <button
                           onClick={handleSignOut}
@@ -301,13 +474,17 @@ export default function StudentDashboard() {
                     <p className="text-xl font-semibold">
                       {studentData?.department || ""}
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Dept</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Dept
+                    </p>
                   </div>
                   <div className="bg-gray-100 dark:bg-slate-800 p-3 rounded-xl text-center flex-1 shadow-sm">
                     <p className="text-xl font-semibold">
                       {studentData?.room || ""}
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Room</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Room
+                    </p>
                   </div>
                 </div>
               </div>
@@ -365,7 +542,7 @@ export default function StudentDashboard() {
                 </button>
               </div>
             </div>
-            
+
             {isLoading ? (
               <>
                 <MessageSkeleton />
@@ -373,7 +550,7 @@ export default function StudentDashboard() {
                 <MessageSkeleton />
               </>
             ) : posts.length > 0 ? (
-              posts.map((post) => <MessageBox key={post.id} post={post} />)
+              posts.map((post) => <MessageBox key={post.id} post={post} studentData={studentData} />)
             ) : (
               <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm text-center">
                 <p className="text-gray-500 dark:text-gray-400">
@@ -387,11 +564,108 @@ export default function StudentDashboard() {
           </div>
         </div>
       </div>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-full max-w-md relative">
+            <button
+              onClick={handleCloseModal}
+              className="absolute top-4 right-4 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="p-6">
+              <h2 className="text-xl font-bold mb-6 dark:text-white">
+                Edit Profile
+              </h2>
+
+              <form onSubmit={handleProfileUpdate}>
+                <div className="mb-6">
+                  {/* Replace previous image upload with new component */}
+                  <ProfileImageUploader
+                    currentImageUrl={studentData?.profilePictureUrl || ""}
+                    studentName={studentData?.name || ""}
+                    roomNumber={studentData?.room}
+                    onImageUploaded={handleImageUploaded}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      First Name
+                    </label>
+                    <input
+                      type="text"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Last Name
+                    </label>
+                    <input
+                      type="text"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Leave blank to keep current password"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Confirm Password
+                  </label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Leave blank to keep current password"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={handleCloseModal}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-800 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// Profile skeleton component
 const ProfileSkeleton = () => {
   return (
     <>
@@ -418,7 +692,6 @@ const ProfileSkeleton = () => {
   );
 };
 
-// Message skeleton component
 const MessageSkeleton = () => {
   return (
     <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm animate-pulse">
@@ -447,12 +720,11 @@ const MessageSkeleton = () => {
   );
 };
 
-// Props interface for MessageBox
 interface MessageBoxProps {
   post: Post;
 }
 
-const MessageBox: React.FC<MessageBoxProps> = ({ post }) => {
+const MessageBox: React.FC<MessageBoxProps & { studentData: StudentData | null }> = ({ post, studentData }) => {
   const [isSolved, setIsSolved] = React.useState<boolean>(post.solved);
   const [likes, setLikes] = React.useState<number>(post.likes);
 
@@ -485,7 +757,7 @@ const MessageBox: React.FC<MessageBoxProps> = ({ post }) => {
     <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm">
       <div className="flex items-center gap-3">
         <Image
-          src={"/test.jpeg"}
+          src={studentData?.profilePictureUrl || "/boy.png"}
           width={48}
           height={48}
           alt="profile"
