@@ -11,7 +11,7 @@ if (!getApps().length) {
     });
 }
 
-// Define role hierarchy and permissions
+// Role hierarchy and permissions
 const roleHierarchy = {
     'chief_warden': ['supervisor', 'hostel_warden', 'floor_warden', 'floor_attendant', 'student'],
     'supervisor': ['hostel_warden', 'floor_warden', 'floor_attendant', 'student'],
