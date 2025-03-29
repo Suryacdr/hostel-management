@@ -112,7 +112,7 @@
         "father": "Mr. Rajesh Sharma",
         "mother": "Mrs. Sunita Sharma"
       },
-      "course": "Bachelor of Computer Applications",
+      "course": "BCA",
       "permanentAddress": {
         "street": "123 Main Street",
         "city": "New Delhi",
@@ -145,7 +145,7 @@
         "father": "Mr. Suresh Patel",
         "mother": "Mrs. Priya Patel"
       },
-      "course": "Bachelor of Computer Applications",
+      "course": "BCA",
       "permanentAddress": {
         "street": "456 Park Road",
         "city": "Mumbai",
@@ -162,9 +162,42 @@
         "roommateName": "Rahul Sharma"
       },
       "remarks": [],
-      "complaints": [],
-      "maintenance": [],
-      "profilePictureUrl": ""
+      "complaints": [
+        {
+          "id": "C002",
+          "date": "2024-01-14",
+          "time": "18:45",
+          "message": "Water leakage from ceiling during rain",
+          "status": "in-progress",
+          "reportedTo": "HW001",
+          "priority": "high",
+          "assignedTo": "FA001"
+        }
+      ],
+      "maintenance": [
+        {
+          "id": "M002",
+          "date": "2024-01-08",
+          "time": "11:20",
+          "message": "Bathroom tap is leaking",
+          "status": "completed",
+          "reportedTo": "FA001",
+          "priority": "medium",
+          "completedDate": "2024-01-11",
+          "completedBy": "Maintenance Staff"
+        },
+        {
+          "id": "M003",
+          "date": "2024-01-16",
+          "time": "16:30",
+          "message": "Light bulb in study area needs replacement",
+          "status": "pending",
+          "reportedTo": "FA001",
+          "priority": "low"
+        }
+      ],
+      "profilePictureUrl": "",
+      "bucket": []
     },
     "ST003": {
       "fullName": "Neha Verma",
@@ -178,7 +211,7 @@
         "father": "Mr. Anil Verma",
         "mother": "Mrs. Kavita Verma"
       },
-      "course": "Bachelor of Science",
+      "course": "BSc",
       "permanentAddress": {
         "street": "789 Hill Road",
         "city": "Bangalore",
@@ -211,7 +244,7 @@
         "father": "Mr. Rakesh Singh",
         "mother": "Mrs. Sunita Singh"
       },
-      "course": "Bachelor of Arts",
+      "course": "BA",
       "permanentAddress": {
         "street": "123 Lake View",
         "city": "Chennai",
@@ -230,7 +263,8 @@
       "remarks": [],
       "complaints": [],
       "maintenance": [],
-      "profilePictureUrl": ""
+      "profilePictureUrl": "",
+      "bucket": []
     }
   }
 }
