@@ -400,12 +400,12 @@ export default function StudentDashboard() {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-slate-950 dark:text-white">
       <div className="bg-white dark:bg-slate-900 shadow-md rounded-b-3xl mb-6">
-        <div className="max-w-6xl mx-auto p-6 flex items-start gap-8">
+        <div className="max-w-6xl mx-auto p-4 md:p-6 flex flex-col md:flex-row items-center md:items-start gap-4 md:gap-8">
           {isLoading ? (
             <ProfileSkeleton />
           ) : (
             <>
-              <div className="w-40 h-40 rounded-full overflow-hidden ring-4 ring-gray-100 dark:ring-slate-800 flex-shrink-0">
+              <div className="w-28 h-28 md:w-40 md:h-40 rounded-full overflow-hidden ring-4 ring-gray-100 dark:ring-slate-800 flex-shrink-0">
                 <Image
                   src={studentData?.profilePictureUrl || "/boy.png"}
                   width={200}
@@ -414,20 +414,20 @@ export default function StudentDashboard() {
                   className="object-cover w-full h-full"
                 />
               </div>
-              <div className="flex-1">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h2 className="text-2xl font-bold">
+              <div className="flex-1 w-full md:w-auto">
+                <div className="flex flex-col md:flex-row justify-between items-center md:items-start">
+                  <div className="text-center md:text-left mb-3 md:mb-0">
+                    <h2 className="text-xl md:text-2xl font-bold">
                       {studentData?.name || ""}
                     </h2>
-                    <h3 className="text-lg text-gray-600 dark:text-gray-400">
+                    <h3 className="text-base md:text-lg text-gray-600 dark:text-gray-400">
                       {studentData?.id || ""}
                     </h3>
                     <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
                       {studentData?.email || ""}
                     </p>
                   </div>
-                  <div className="flex items-center gap-3 relative">
+                  <div className="flex items-center gap-3 relative mt-2 md:mt-0">
                     <ThemeToggle />
                     <button
                       onClick={handleMenuOpen}
@@ -461,25 +461,25 @@ export default function StudentDashboard() {
                   </div>
                 </div>
 
-                <div className="flex gap-4 mt-6">
-                  <div className="bg-gray-100 dark:bg-slate-800 p-3 rounded-xl text-center flex-1 shadow-sm">
-                    <p className="text-xl font-semibold">
+                <div className="flex flex-wrap gap-2 md:gap-4 mt-4 md:mt-6">
+                  <div className="bg-gray-100 dark:bg-slate-800 p-2 md:p-3 rounded-xl text-center flex-1 shadow-sm min-w-[100px]">
+                    <p className="text-lg md:text-xl font-semibold">
                       {studentData?.course || ""}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                       Course
                     </p>
                   </div>
-                  <div className="bg-gray-100 dark:bg-slate-800 p-3 rounded-xl text-center flex-1 shadow-sm">
-                    <p className="text-xl font-semibold">
+                  <div className="bg-gray-100 dark:bg-slate-800 p-2 md:p-3 rounded-xl text-center flex-1 shadow-sm min-w-[100px]">
+                    <p className="text-lg md:text-xl font-semibold">
                       {studentData?.department || ""}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                       Dept
                     </p>
                   </div>
-                  <div className="bg-gray-100 dark:bg-slate-800 p-3 rounded-xl text-center flex-1 shadow-sm">
-                    <p className="text-xl font-semibold">
+                  <div className="bg-gray-100 dark:bg-slate-800 p-2 md:p-3 rounded-xl text-center flex-1 shadow-sm min-w-[100px]">
+                    <p className="text-lg md:text-xl font-semibold">
                       {studentData?.room || ""}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -506,10 +506,10 @@ export default function StudentDashboard() {
                   onChange={(e) => setPostContent(e.target.value)}
                 />
               </div>
-              <div className="mt-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
+              <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="flex items-center gap-3 w-full sm:w-auto">
                   <button
-                    className={`border-2 border-red-500 cursor-pointer rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
+                    className={`border-2 border-red-500 cursor-pointer rounded-xl px-3 sm:px-4 py-2 text-sm font-medium transition-colors ${
                       selectedTag === "Complaint"
                         ? "bg-red-50 dark:bg-red-500/10 text-red-500"
                         : "text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
@@ -519,7 +519,7 @@ export default function StudentDashboard() {
                     Complaint
                   </button>
                   <button
-                    className={`border-2 border-blue-500 cursor-pointer rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
+                    className={`border-2 border-blue-500 cursor-pointer rounded-xl px-3 sm:px-4 py-2 text-sm font-medium transition-colors ${
                       selectedTag === "Maintenance"
                         ? "bg-blue-50 dark:bg-blue-500/10 text-blue-500"
                         : "text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10"
@@ -530,7 +530,7 @@ export default function StudentDashboard() {
                   </button>
                 </div>
                 <button
-                  className={`px-5 py-2 text-sm text-white cursor-pointer rounded-xl transition-colors ${
+                  className={`w-full sm:w-auto px-5 py-2 text-sm text-white cursor-pointer rounded-xl transition-colors ${
                     postContent.trim() !== "" && selectedTag !== ""
                       ? "bg-blue-600 hover:bg-blue-700"
                       : "bg-blue-400 cursor-not-allowed"
@@ -567,7 +567,7 @@ export default function StudentDashboard() {
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-full max-w-md relative">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto relative">
             <button
               onClick={handleCloseModal}
               className="absolute top-4 right-4 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800"
@@ -575,14 +575,13 @@ export default function StudentDashboard() {
               <X size={20} />
             </button>
 
-            <div className="p-6">
-              <h2 className="text-xl font-bold mb-6 dark:text-white">
+            <div className="p-4 sm:p-6">
+              <h2 className="text-xl font-bold mb-4 sm:mb-6 dark:text-white">
                 Edit Profile
               </h2>
 
               <form onSubmit={handleProfileUpdate}>
-                <div className="mb-6">
-                  {/* Replace previous image upload with new component */}
+                <div className="mb-4 sm:mb-6">
                   <ProfileImageUploader
                     currentImageUrl={studentData?.profilePictureUrl || ""}
                     studentName={studentData?.name || ""}
@@ -591,7 +590,7 @@ export default function StudentDashboard() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       First Name
@@ -642,17 +641,17 @@ export default function StudentDashboard() {
                   />
                 </div>
 
-                <div className="flex justify-end gap-3">
+                <div className="flex flex-col sm:flex-row sm:justify-end gap-3">
                   <button
                     type="button"
                     onClick={handleCloseModal}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-800 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700"
+                    className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-800 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                    className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
                   >
                     Save Changes
                   </button>
@@ -669,23 +668,23 @@ export default function StudentDashboard() {
 const ProfileSkeleton = () => {
   return (
     <>
-      <div className="w-40 h-40 rounded-full bg-gray-200 dark:bg-slate-800 flex-shrink-0 animate-pulse"></div>
-      <div className="flex-1">
-        <div className="flex justify-between items-start">
-          <div className="space-y-2">
-            <div className="h-7 w-48 bg-gray-200 dark:bg-slate-800 rounded-md animate-pulse"></div>
-            <div className="h-6 w-32 bg-gray-200 dark:bg-slate-800 rounded-md animate-pulse"></div>
-            <div className="h-5 w-56 bg-gray-200 dark:bg-slate-800 rounded-md animate-pulse"></div>
+      <div className="w-28 h-28 md:w-40 md:h-40 rounded-full bg-gray-200 dark:bg-slate-800 flex-shrink-0 animate-pulse"></div>
+      <div className="flex-1 w-full">
+        <div className="flex flex-col md:flex-row justify-between items-center md:items-start">
+          <div className="space-y-2 text-center md:text-left">
+            <div className="h-7 w-48 bg-gray-200 dark:bg-slate-800 rounded-md animate-pulse mx-auto md:mx-0"></div>
+            <div className="h-6 w-32 bg-gray-200 dark:bg-slate-800 rounded-md animate-pulse mx-auto md:mx-0"></div>
+            <div className="h-5 w-56 bg-gray-200 dark:bg-slate-800 rounded-md animate-pulse mx-auto md:mx-0"></div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 mt-2 md:mt-0">
             <div className="w-10 h-10 bg-gray-200 dark:bg-slate-800 rounded-full animate-pulse"></div>
           </div>
         </div>
 
-        <div className="flex gap-4 mt-6">
-          <div className="bg-gray-200 dark:bg-slate-800 p-3 rounded-xl text-center flex-1 animate-pulse h-16"></div>
-          <div className="bg-gray-200 dark:bg-slate-800 p-3 rounded-xl text-center flex-1 animate-pulse h-16"></div>
-          <div className="bg-gray-200 dark:bg-slate-800 p-3 rounded-xl text-center flex-1 animate-pulse h-16"></div>
+        <div className="flex flex-wrap gap-2 md:gap-4 mt-4 md:mt-6">
+          <div className="bg-gray-200 dark:bg-slate-800 p-3 rounded-xl text-center flex-1 animate-pulse h-16 min-w-[100px]"></div>
+          <div className="bg-gray-200 dark:bg-slate-800 p-3 rounded-xl text-center flex-1 animate-pulse h-16 min-w-[100px]"></div>
+          <div className="bg-gray-200 dark:bg-slate-800 p-3 rounded-xl text-center flex-1 animate-pulse h-16 min-w-[100px]"></div>
         </div>
       </div>
     </>
@@ -696,7 +695,7 @@ const MessageSkeleton = () => {
   return (
     <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm animate-pulse">
       <div className="flex items-center gap-3">
-        <div className="w-12 h-12 bg-gray-200 dark:bg-slate-800 rounded-full"></div>
+        <div className="w-10 h-10 md:w-12 md:h-12 bg-gray-200 dark:bg-slate-800 rounded-full"></div>
         <div>
           <div className="h-5 w-32 bg-gray-200 dark:bg-slate-800 rounded-md"></div>
           <div className="h-3 w-24 bg-gray-200 dark:bg-slate-800 rounded-md mt-2"></div>
@@ -708,9 +707,9 @@ const MessageSkeleton = () => {
         <div className="h-4 w-5/6 bg-gray-200 dark:bg-slate-800 rounded-md mt-2"></div>
         <div className="h-4 w-4/6 bg-gray-200 dark:bg-slate-800 rounded-md mt-2"></div>
 
-        <div className="mt-4 pt-3 flex items-center justify-between border-t border-gray-100 dark:border-slate-800">
+        <div className="mt-4 pt-3 flex flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-3 sm:gap-0 border-t border-gray-100 dark:border-slate-800">
           <div className="h-6 w-20 bg-gray-200 dark:bg-slate-800 rounded-full"></div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 self-end sm:self-auto">
             <div className="h-6 w-10 bg-gray-200 dark:bg-slate-800 rounded-md"></div>
             <div className="h-6 w-24 bg-gray-200 dark:bg-slate-800 rounded-full"></div>
           </div>
@@ -756,13 +755,15 @@ const MessageBox: React.FC<MessageBoxProps & { studentData: StudentData | null }
   return (
     <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm">
       <div className="flex items-center gap-3">
-        <Image
-          src={studentData?.profilePictureUrl || "/boy.png"}
-          width={48}
-          height={48}
-          alt="profile"
-          className="rounded-full"
-        />
+        <div className="w-10 h-10 md:w-12 md:h-12 rounded-full overflow-hidden flex-shrink-0">
+          <Image
+            src={studentData?.profilePictureUrl || "/boy.png"}
+            width={50}
+            height={50}
+            alt="profile"
+            className="w-full h-full object-cover"
+          />
+        </div>
         <div>
           <h3 className="font-medium">{post.author}</h3>
           <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -774,7 +775,7 @@ const MessageBox: React.FC<MessageBoxProps & { studentData: StudentData | null }
       <div className="mt-3">
         <p className="text-gray-700 dark:text-gray-300">{post.content}</p>
 
-        <div className="mt-4 pt-3 flex items-center justify-between border-t border-gray-100 dark:border-slate-800">
+        <div className="mt-4 pt-3 flex flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-3 sm:gap-0 border-t border-gray-100 dark:border-slate-800">
           <span
             className={`px-3 py-1 text-xs font-medium rounded-full ${
               post.tag === "Maintenance"
@@ -784,7 +785,7 @@ const MessageBox: React.FC<MessageBoxProps & { studentData: StudentData | null }
           >
             {post.tag}
           </span>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 self-end sm:self-auto">
             <button
               onClick={() => setLikes((prev) => prev + 1)}
               className="flex items-center cursor-pointer gap-1 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
