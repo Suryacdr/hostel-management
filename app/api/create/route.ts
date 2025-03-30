@@ -6,10 +6,9 @@ import { getAuth } from "firebase-admin/auth";
 // Initialize Firebase Admin if it hasn't been initialized yet
 const serviceAccount = require("@/serviceAccountKey.json");
 
-// Initialize Firebase Admin
 if (!admin.apps.length) {
   admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
+    credential: admin.credential.cert(serviceAccount),
   });
 }
 
@@ -18,6 +17,8 @@ const auth = getAuth();
 
 export async function POST(request: NextRequest) {
   try {
+    console.log("Incoming request received");
+
     // Get the authorization header
     const authHeader = request.headers.get("authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -27,28 +28,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Extract the token
     const token = authHeader.split("Bearer ")[1];
-
-    // Verify the token and get the user
     const decodedToken = await auth.verifyIdToken(token);
     const uid = decodedToken.uid;
-    const userRecord = await auth.getUser(uid);
 
     if (!uid) {
       return NextResponse.json(
-        { error: "Unauthorized: Invalid user" },
+        { error: "Unauthorized: Invalid user, missing UID" },
         { status: 401 }
       );
     }
 
+    const userRecord = await auth.getUser(uid);
     console.log("User authenticated:", uid, "Email:", userRecord.email);
 
-    // Get request body
-    const body = await request.json();
-    const { content, tag } = body;
+    // Get and parse request body safely
+    let body;
+    try {
+      const rawBody = await request.text();
+      body = rawBody ? JSON.parse(rawBody) : null;
+      console.log("Parsed request body:", body);
+    } catch (e) {
+      console.error("Error parsing request body:", e);
+      return NextResponse.json(
+        { error: "Invalid request body format" },
+        { status: 400 }
+      );
+    }
 
-    // Validate required fields
+    const { content, tag } = body || {};
+
     if (!content || !tag) {
       return NextResponse.json(
         { error: "Missing required fields: content and tag are required" },
@@ -56,7 +65,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate tag value
     if (tag !== "Complaint" && tag !== "Maintenance") {
       return NextResponse.json(
         { error: "Invalid tag value. Must be 'Complaint' or 'Maintenance'" },
@@ -64,107 +72,72 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find student by UID or email
     let studentSnapshot = await db.collection("students").where("uid", "==", uid).get();
-    console.log("Looking for student with uid:", uid, "Found:", !studentSnapshot.empty);
-    
     if (studentSnapshot.empty && userRecord.email) {
-      console.log("Trying to find student with email:", userRecord.email);
       studentSnapshot = await db.collection("students").where("email", "==", userRecord.email).get();
-      console.log("Found with email:", !studentSnapshot.empty);
     }
 
     let studentDoc;
     let studentData;
-    let studentId;
+    let studentId = uid;
 
     if (studentSnapshot.empty) {
-      // If still not found, let's check what students are in the database for debugging
-      const allStudentsSnapshot = await db.collection("students").get();
-      console.log("Total students in database:", allStudentsSnapshot.size);
-      if (allStudentsSnapshot.size > 0) {
-        console.log("Sample student data:", allStudentsSnapshot.docs[0].data());
-      }
-      
-      // Instead of returning an error, create a new student document
-      console.log("Creating new student document for user:", uid);
-      
-      // Create a minimal student record
-      studentId = uid; // Use the auth UID as the document ID
       studentData = {
-        uid: uid,
+        uid,
         email: userRecord.email,
-        fullName: userRecord.displayName || "Student",
+        name: userRecord.displayName || "Student",
+        id: userRecord.uid.substring(0, 8).toUpperCase(),
+        course: "Not set",
+        department: "Not set",
+        room: "Not assigned",
+        profilePictureUrl: userRecord.photoURL || "",
         complaints: [],
         maintenance: [],
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
       };
-      
-      // Add the new student document
       await db.collection("students").doc(studentId).set(studentData);
-      console.log("Created new student document with ID:", studentId);
     } else {
       studentDoc = studentSnapshot.docs[0];
       studentData = studentDoc.data();
       studentId = studentDoc.id;
-      console.log("Found student:", studentId, "Name:", studentData.fullName);
     }
 
-    // Generate a unique ID for the post
-    const postId = db.collection("posts").doc().id;
-
-    // Create post document
+    const postId = Date.now();
     const postData = {
       id: postId,
       message: content,
       tag,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      author: studentData?.fullName || "Unknown",
+      author: studentData.name || userRecord.displayName || "Unknown",
       authorId: uid,
       likes: 0,
       solved: false,
     };
 
-    // Add the post to the appropriate array in the student document
-    if (tag === "Complaint") {
-      // Initialize the complaints array if it doesn't exist
-      if (!Array.isArray(studentData.complaints)) {
-        await db.collection("students").doc(studentId).update({
-          complaints: []
-        });
-      }
-      
-      // Add to student's complaints array
-      await db.collection("students").doc(studentId).update({
-        complaints: admin.firestore.FieldValue.arrayUnion(postData)
-      });
-      console.log("Added complaint to student document");
-    } else if (tag === "Maintenance") {
-      // Initialize the maintenance array if it doesn't exist
-      if (!Array.isArray(studentData.maintenance)) {
-        await db.collection("students").doc(studentId).update({
-          maintenance: []
-        });
-      }
-      
-      // Add to student's maintenance array
-      await db.collection("students").doc(studentId).update({
-        maintenance: admin.firestore.FieldValue.arrayUnion(postData)
-      });
-      console.log("Added maintenance request to student document");
+    if (!postData || typeof postData !== "object") {
+      return NextResponse.json(
+        { error: "Failed to create post: postData is invalid" },
+        { status: 500 }
+      );
     }
 
-    return NextResponse.json(
+    // Ensure complaints or maintenance array exists before updating
+    const updateField = tag === "Complaint" ? "complaints" : "maintenance";
+    await db.collection("students").doc(studentId).set(
       {
-        message: "Post created successfully",
-        postId: postId
+        [updateField]: admin.firestore.FieldValue.arrayUnion(postData),
       },
+      { merge: true }
+    );
+
+    return NextResponse.json(
+      { message: "Post created successfully", postId },
       { status: 201 }
     );
   } catch (error) {
-    console.error("Error creating post:", error);
+    console.error("Error creating post:", error ? error : "Unknown error");
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: `Internal server error: ${error instanceof Error ? error.message : "Unknown error"}` },
       { status: 500 }
     );
   }
