@@ -25,6 +25,20 @@ type MaintenanceOrComplaint = {
     [key: string]: any;
 };
 
+type Issue = {
+    id: string;
+    studentId?: string;
+    studentName?: string;
+    message: string;
+    type: string; // 'complaint' or 'maintenance'
+    timestamp: Date;
+    author?: string;
+    authorId?: string;
+    likes?: number;
+    solved?: boolean;
+    [key: string]: any;
+};
+
 // Helper functions
 const formatTimestamp = (timestamp: any): Date => {
     return timestamp?.toDate?.() || new Date();
@@ -36,6 +50,15 @@ const mapItemsWithStudent = (items: any[] = [], studentId: string, studentName: 
         studentId,
         studentName,
         timestamp: formatTimestamp(item.timestamp)
+    }));
+};
+
+const mapIssuesWithStudent = (issues: any[] = [], studentId: string, studentName: string): Issue[] => {
+    return issues.map(issue => ({
+        ...issue,
+        studentId,
+        studentName,
+        timestamp: formatTimestamp(issue.timestamp)
     }));
 };
 
@@ -80,7 +103,7 @@ export async function GET(request: NextRequest) {
             case "student": {
                 // Find student by UID or email
                 let studentSnapshot = await db.collection("students").where("uid", "==", uid).get();
-                
+
                 if (studentSnapshot.empty && userRecord.email) {
                     studentSnapshot = await db.collection("students").where("email", "==", userRecord.email).get();
                 }
@@ -103,6 +126,7 @@ export async function GET(request: NextRequest) {
                         name: studentData.fullName,
                         email: studentData.email,
                         course: studentData.course,
+                        registrationNumber: studentData.registrationNumber || studentData.regestrationNumber || "",
                         department: studentData.course?.split(" ").pop() || "",
                         room: studentData.hostelDetails?.roomNumber || "",
                         profilePictureUrl: studentData.profilePictureUrl || ""
@@ -117,7 +141,11 @@ export async function GET(request: NextRequest) {
                         ...issue,
                         timestamp: formatTimestamp(issue.timestamp)
                     })),
-                    issues: studentData.issues || [],
+                    issues: (studentData.issues || []).map((issue: any) => ({
+                        id: issue.id,
+                        ...issue,
+                        timestamp: formatTimestamp(issue.timestamp)
+                    })),
                     remarks: studentData.remarks || []
                 };
                 break;
@@ -135,9 +163,10 @@ export async function GET(request: NextRequest) {
                     ...doc.data()
                 }));
 
-                // Process students and their complaints/maintenance
+                // Process students and their complaints/maintenance/issues
                 const allComplaints: MaintenanceOrComplaint[] = [];
                 const allMaintenance: MaintenanceOrComplaint[] = [];
+                const allIssues: Issue[] = [];
 
                 studentsSnapshot.docs.forEach(doc => {
                     const studentData = doc.data();
@@ -150,12 +179,16 @@ export async function GET(request: NextRequest) {
                     if (studentData.maintenance) {
                         allMaintenance.push(...mapItemsWithStudent(studentData.maintenance, studentId, studentName));
                     }
+                    if (studentData.issues) {
+                        allIssues.push(...mapIssuesWithStudent(studentData.issues, studentId, studentName));
+                    }
                 });
 
                 responseData = {
                     hostels,
                     complaints: allComplaints,
-                    maintenance: allMaintenance
+                    maintenance: allMaintenance,
+                    issues: allIssues
                 };
                 break;
             }
@@ -188,9 +221,10 @@ export async function GET(request: NextRequest) {
                     db.collection("students").where("hostelId", "==", hostelId).get()
                 ]);
 
-                // Process students and their complaints/maintenance
+                // Process students and their complaints/maintenance/issues
                 const hostelComplaints: MaintenanceOrComplaint[] = [];
                 const hostelMaintenance: MaintenanceOrComplaint[] = [];
+                const hostelIssues: Issue[] = [];
 
                 hostelStudentsSnapshot.docs.forEach(doc => {
                     const studentData = doc.data();
@@ -203,6 +237,9 @@ export async function GET(request: NextRequest) {
                     if (studentData.maintenance) {
                         hostelMaintenance.push(...mapItemsWithStudent(studentData.maintenance, studentId, studentName));
                     }
+                    if (studentData.issues) {
+                        hostelIssues.push(...mapIssuesWithStudent(studentData.issues, studentId, studentName));
+                    }
                 });
 
                 responseData = {
@@ -213,7 +250,8 @@ export async function GET(request: NextRequest) {
                         ...doc.data()
                     })),
                     complaints: hostelComplaints,
-                    maintenance: hostelMaintenance
+                    maintenance: hostelMaintenance,
+                    issues: hostelIssues
                 };
                 break;
             }
@@ -262,10 +300,34 @@ export async function GET(request: NextRequest) {
                     )
                 ]);
 
+                // Get all students from assigned floors to fetch their issues
+                const floorStudents = await Promise.all(
+                    assignedFloors.map((floorId: string) =>
+                        db.collection("students")
+                            .where("floorId", "==", floorId)
+                            .get()
+                            .then(snapshot => snapshot.docs)
+                    )
+                );
+                
+                // Process students' issues
+                const floorIssues: Issue[] = [];
+                
+                floorStudents.flat().forEach(doc => {
+                    const studentData = doc.data();
+                    const studentId = doc.id;
+                    const studentName = studentData.fullName;
+                    
+                    if (studentData.issues) {
+                        floorIssues.push(...mapIssuesWithStudent(studentData.issues, studentId, studentName));
+                    }
+                });
+                
                 responseData = {
                     floorWarden: floorWardenData,
                     floors: floorsData.filter(Boolean),
-                    rooms: roomsData.flat()
+                    rooms: roomsData.flat(),
+                    issues: floorIssues
                 };
                 break;
             }
@@ -298,17 +360,36 @@ export async function GET(request: NextRequest) {
                     db.collection("students").where("floorId", "==", floorId).get()
                 ]);
 
-                // Process maintenance requests
+                // Process maintenance requests and issues
                 const floorMaintenance: MaintenanceOrComplaint[] = [];
+                const floorIssues: Issue[] = [];
 
                 floorStudentsSnapshot.docs.forEach(doc => {
                     const studentData = doc.data();
+                    const studentId = doc.id;
+                    const studentName = studentData.fullName;
+                    
                     if (studentData.maintenance) {
                         floorMaintenance.push(...mapItemsWithStudent(
-                            studentData.maintenance, 
-                            doc.id, 
-                            studentData.fullName
+                            studentData.maintenance,
+                            studentId,
+                            studentName
                         ));
+                    }
+                    
+                    if (studentData.issues) {
+                        // Filter only maintenance type issues for floor attendant
+                        const maintenanceIssues = studentData.issues.filter((issue: any) => 
+                            issue.type === 'maintenance'
+                        );
+                        
+                        if (maintenanceIssues.length > 0) {
+                            floorIssues.push(...mapIssuesWithStudent(
+                                maintenanceIssues,
+                                studentId,
+                                studentName
+                            ));
+                        }
                     }
                 });
 
@@ -319,7 +400,8 @@ export async function GET(request: NextRequest) {
                         id: doc.id,
                         ...doc.data()
                     })),
-                    maintenance: floorMaintenance
+                    maintenance: floorMaintenance,
+                    issues: floorIssues
                 };
                 break;
             }
