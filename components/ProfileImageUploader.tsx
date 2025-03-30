@@ -50,9 +50,7 @@ const ProfileImageUploader: React.FC<ProfileImageUploaderProps> = ({
       setUploadError(null);
       
       // Compress the image before uploading
-      console.log("Compressing image...");
       const compressedFile = await compressImage(file, 800, 0.8);
-      console.log(`Original size: ${(file.size / 1024).toFixed(2)}KB, Compressed size: ${(compressedFile.size / 1024).toFixed(2)}KB`);
       
       // Convert compressed file to base64
       const base64Data = await new Promise<string>((resolve, reject) => {
