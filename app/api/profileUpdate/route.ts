@@ -103,11 +103,21 @@ export async function POST(request: NextRequest) {
                 // Get the student document ID
                 const studentDoc = studentSnapshot.docs[0];
                 const studentId = studentDoc.id;
+                const studentData = studentDoc.data();
 
-                // Update the student document with the profile picture URL
-                await db.collection("students").doc(studentId).update({
+                // Ensure the UID field is present and correct
+                const updateData: { profilePictureUrl: string; uid?: string } = {
                     profilePictureUrl: secureUrl
-                });
+                };
+
+                // If UID is missing or mismatched, add it to the update
+                if (!studentData.uid || studentData.uid !== uid) {
+                    console.log(`Ensuring correct UID (${uid}) for student ${studentId}`);
+                    updateData.uid = uid;
+                }
+
+                // Update the student document with the profile picture URL and ensure UID is set
+                await db.collection("students").doc(studentId).update(updateData);
 
                 console.log("Profile updated in Firestore successfully using Admin SDK for student ID:", studentId);
 
