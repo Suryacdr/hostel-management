@@ -50,6 +50,7 @@ export async function POST(request: Request) {
       if (data.name !== undefined) updateData.name = data.name;
       if (data.email !== undefined) updateData.email = data.email;
       if (data.profilePictureUrl !== undefined) updateData.profilePictureUrl = data.profilePictureUrl;
+      if (data.registrationNumber !== undefined) updateData.registrationNumber = data.registrationNumber;
       
       // Skip if no fields to update
       if (Object.keys(updateData).length === 0) {
@@ -62,6 +63,7 @@ export async function POST(request: Request) {
       console.log(`Attempting to update user with UID ${uid}`);
 
       // Update the user data in Firestore using admin SDK
+      
       const adminDb = admin.firestore();
       
       // Use the same approach as in fetch API to find the student document
@@ -85,8 +87,16 @@ export async function POST(request: Request) {
       // Get the student document
       const studentDoc = studentSnapshot.docs[0];
       const studentId = studentDoc.id;
+      const studentData = studentDoc.data();
       
       console.log(`Found student document with ID: ${studentId}`);
+      
+      // Always ensure the UID field is correct
+      if (!studentData.uid || studentData.uid !== uid) {
+        console.log(`Ensuring correct UID (${uid}) for student ${studentId}`);
+        updateData.uid = uid;
+      }
+      
       console.log(`Updating with data:`, updateData);
       
       // If document exists, update it
@@ -94,6 +104,9 @@ export async function POST(request: Request) {
         ...(data.name && { fullName: data.name }),
         ...(data.email && { email: data.email }),
         ...(data.profilePictureUrl && { profilePictureUrl: data.profilePictureUrl }),
+        ...(data.registrationNumber && { registrationNumber: data.registrationNumber }),
+        // Always include the UID in the update to ensure it's set
+        uid: uid,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       });
       
