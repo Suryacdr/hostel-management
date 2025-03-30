@@ -11,7 +11,7 @@ import ProfileImageUploader from "@/components/ProfileImageUploader";
 interface Post {
   id: number;
   content: string;
-  tag: "Complaint" | "Maintenance";
+  type: "Complaint" | "Maintenance";
   timestamp: Date;
   author: string;
   likes: number;
@@ -26,6 +26,7 @@ interface StudentData {
   department: string;
   room: string;
   profilePictureUrl: string;
+  registrationNumber: string;
 }
 
 export default function StudentDashboard() {
@@ -137,42 +138,63 @@ export default function StudentDashboard() {
 
       const data = await response.json();
       console.log("Received data:", data);
+      // Debug studentData and specifically the registrationNumber field
+      console.log("Student data received:", data.student);
+      console.log("Registration number:", data.student?.registrationNumber);
 
       setStudentData(data.student);
-      console.log("Updated student data with profile picture:", data.student.profilePictureUrl);
+      console.log(
+        "Updated student data with profile picture:",
+        data.student.profilePictureUrl
+      );
 
-      const complaintsArray = Array.isArray(data.complaints)
-        ? data.complaints
-        : [];
-      const maintenanceArray = Array.isArray(data.maintenance)
-        ? data.maintenance
-        : [];
+      // Check for issues array first (new structure)
+      const issuesArray = Array.isArray(data.issues) ? data.issues : [];
+      
+      // Fallback to old structure if issues array is empty
+      const complaintsArray = Array.isArray(data.complaints) ? data.complaints : [];
+      const maintenanceArray = Array.isArray(data.maintenance) ? data.maintenance : [];
+      
+      let allPosts = [];
+      
+      if (issuesArray.length > 0) {
+        // Process issues array (new structure)
+        allPosts = issuesArray.map((issue: any) => ({
+          id: issue.id,
+          content: issue.message,
+          type: issue.type,
+          timestamp: new Date(issue.timestamp),
+          author: data.student?.name || "You",
+          likes: issue.likes || 0,
+          solved: issue.solved || false,
+        }));
+      } else {
+        // Process separate arrays (old structure)
+        const formattedComplaints = complaintsArray.map((complaint: any) => ({
+          id: complaint.id,
+          content: complaint.message,
+          type: "Complaint" as const,
+          timestamp: new Date(complaint.timestamp),
+          author: data.student?.name || "You",
+          likes: complaint.likes || 0,
+          solved: complaint.solved || false,
+        }));
 
-      const formattedComplaints = complaintsArray.map((complaint: any) => ({
-        id: complaint.id,
-        content: complaint.message,
-        tag: "Complaint" as const,
-        timestamp: new Date(complaint.timestamp),
-        author: data.student?.name || "You",
-        likes: complaint.likes || 0,
-        solved: complaint.solved || false,
-      }));
-
-      const formattedMaintenance = maintenanceArray.map(
-        (maintenance: any) => ({
+        const formattedMaintenance = maintenanceArray.map((maintenance: any) => ({
           id: maintenance.id,
           content: maintenance.message,
-          tag: "Maintenance" as const,
+          type: "Maintenance" as const,
           timestamp: new Date(maintenance.timestamp),
           author: data.student?.name || "You",
           likes: maintenance.likes || 0,
           solved: maintenance.solved || false,
-        })
-      );
+        }));
 
-      const allPosts = [...formattedComplaints, ...formattedMaintenance].sort(
-        (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
-      );
+        allPosts = [...formattedComplaints, ...formattedMaintenance];
+      }
+      
+      // Sort posts by timestamp (newest first)
+      allPosts.sort((a: Post, b: Post) => b.timestamp.getTime() - a.timestamp.getTime());
 
       setPosts(allPosts);
       console.log("Posts loaded:", allPosts.length);
@@ -240,7 +262,9 @@ export default function StudentDashboard() {
 
   // Handle profile update submission
   const handleProfileUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
+    if (e) {
+      e?.preventDefault();
+    }
 
     try {
       const user = auth.currentUser;
@@ -284,36 +308,7 @@ export default function StudentDashboard() {
         await completeProfileUpdate(updateData, user);
       }
 
-      // Always refresh student data after update attempts
-      if (user) {
-        const token = await user.getIdToken(true);
-        const response = await fetch("/api/fetch", {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(
-            errorData.error || "Failed to fetch updated profile data"
-          );
-        }
-
-        const data = await response.json();
-
-        // Update local state with the fresh data
-        setStudentData(data.student);
-
-        // Reset form state
-        if (data.student) {
-          const nameParts = data.student.name.split(" ");
-          setFirstName(nameParts[0] || "");
-          setLastName(nameParts.slice(1).join(" ") || "");
-        }
-      }
+      
 
       alert("Profile updated successfully!");
       handleCloseModal();
@@ -351,52 +346,83 @@ export default function StudentDashboard() {
     return () => unsubscribe();
   }, []);
 
-  const handlePost = async () => {
+  const handlePost = React.useCallback(async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
+
     if (!postContent.trim() || !selectedTag) {
-      alert("Please fill in all fields.");
-      return;
+        alert("Please fill in all fields.");
+        return;
     }
 
     try {
-      const user = auth.currentUser;
-      if (!user) {
-        alert("User not logged in.");
-        return;
-      }
+        const user = auth.currentUser;
+        if (!user) {
+            alert("User not logged in.");
+            return;
+        }
 
-      const token = await user.getIdToken();
-      const response = await fetch("/api/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          content: postContent,
-          tag: selectedTag,
-        }),
-      });
+        setIsLoading(true);
+        const token = await user.getIdToken();
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("API Error:", errorData);
-        alert(`Failed to create post: ${errorData.error || "Unknown error"}`);
-        return;
-      }
+        const response = await fetch("/api/create-issues", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+                content: postContent,
+                type: selectedTag.toLowerCase(),
+            }),
+        });
 
-      const data = await response.json();
-      console.log("Post created:", data);
+        const responseText = await response.text();
+        let responseData;
 
-      fetchStudentData();
+        try {
+            if (responseText.trim()) {
+                responseData = JSON.parse(responseText);
+            } else {
+                responseData = { error: "Empty response from server" };
+            }
+        } catch (parseError) {
+            console.error("JSON parse error:", parseError);
+            alert("Error processing server response. Please try again.");
+            return;
+        }
 
-      setPostContent("");
-      setSelectedTag("");
+        if (!response.ok) {
+            console.error("API Error:", responseData);
+            alert(`Failed to create post: ${responseData.error || "Unknown error"}`);
+            return;
+        }
+
+        console.log("Post created:", responseData);
+
+        const postId = responseData.postId || responseData.issueId || Date.now();
+        const newPost = {
+            id: postId,
+            content: postContent,
+            type: selectedTag,
+            timestamp: new Date(),
+            author: studentData?.name || "You",
+            likes: 0,
+            solved: false
+        };
+
+        setPosts((prevPosts) => [newPost, ...prevPosts]);
+
+        setPostContent("");
+        setSelectedTag("");
     } catch (error) {
-      console.error("Error creating post:", error);
-      alert("An unexpected error occurred.");
+        console.error("Error creating post:", error);
+        alert("An unexpected error occurred.");
+    } finally {
+        setIsLoading(false);
     }
-  };
-
+  }, [postContent, selectedTag, studentData]);
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-slate-950 dark:text-white">
       <div className="bg-white dark:bg-slate-900 shadow-md rounded-b-3xl mb-6">
@@ -421,7 +447,7 @@ export default function StudentDashboard() {
                       {studentData?.name || ""}
                     </h2>
                     <h3 className="text-base md:text-lg text-gray-600 dark:text-gray-400">
-                      {studentData?.id || ""}
+                      {studentData?.registrationNumber || ""}
                     </h3>
                     <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
                       {studentData?.email || ""}
@@ -497,50 +523,59 @@ export default function StudentDashboard() {
         <div className="w-full">
           <div className="space-y-6">
             <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm">
-              <div className="bg-gray-100 dark:bg-slate-800 rounded-xl overflow-hidden">
-                <input
-                  type="text"
-                  placeholder="Have any complaints or maintenance?"
-                  className="w-full p-3 bg-transparent outline-none"
-                  value={postContent}
-                  onChange={(e) => setPostContent(e.target.value)}
-                />
-              </div>
-              <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="flex items-center gap-3 w-full sm:w-auto">
+              <form className="w-full">
+                <div className="bg-gray-100 dark:bg-slate-800 rounded-xl overflow-hidden">
+                  <input
+                    type="text"
+                    placeholder="Have any complaints or maintenance?"
+                    className="w-full p-3 bg-transparent outline-none"
+                    value={postContent}
+                    onChange={(e) => setPostContent(e.target.value)}
+                  />
+                </div>
+                <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <button
+                      type="button"
+                      className={`border-2 border-red-500 cursor-pointer rounded-xl px-3 sm:px-4 py-2 text-sm font-medium transition-colors ${
+                        selectedTag === "Complaint"
+                          ? "bg-red-50 dark:bg-red-500/10 text-red-500"
+                          : "text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
+                      }`}
+                      onClick={() => setSelectedTag("Complaint")}
+                    >
+                      Complaint
+                    </button>
+                    <button
+                      type="button"
+                      className={`border-2 border-blue-500 cursor-pointer rounded-xl px-3 sm:px-4 py-2 text-sm font-medium transition-colors ${
+                        selectedTag === "Maintenance"
+                          ? "bg-blue-50 dark:bg-blue-500/10 text-blue-500"
+                          : "text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10"
+                      }`}
+                      onClick={() => setSelectedTag("Maintenance")}
+                    >
+                      Maintenance
+                    </button>
+                  </div>
                   <button
-                    className={`border-2 border-red-500 cursor-pointer rounded-xl px-3 sm:px-4 py-2 text-sm font-medium transition-colors ${
-                      selectedTag === "Complaint"
-                        ? "bg-red-50 dark:bg-red-500/10 text-red-500"
-                        : "text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
+                    type="button"
+                    onClick={handlePost}
+                    className={`w-full sm:w-auto px-5 py-2 text-sm text-white cursor-pointer rounded-xl transition-colors ${
+                      postContent.trim() !== "" && selectedTag !== ""
+                        ? "bg-blue-600 hover:bg-blue-700"
+                        : "bg-blue-400 cursor-not-allowed"
                     }`}
-                    onClick={() => setSelectedTag("Complaint")}
+                    disabled={
+                      postContent.trim() === "" ||
+                      selectedTag === "" ||
+                      isLoading
+                    }
                   >
-                    Complaint
-                  </button>
-                  <button
-                    className={`border-2 border-blue-500 cursor-pointer rounded-xl px-3 sm:px-4 py-2 text-sm font-medium transition-colors ${
-                      selectedTag === "Maintenance"
-                        ? "bg-blue-50 dark:bg-blue-500/10 text-blue-500"
-                        : "text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10"
-                    }`}
-                    onClick={() => setSelectedTag("Maintenance")}
-                  >
-                    Maintenance
+                    {isLoading ? "Posting..." : "Post"}
                   </button>
                 </div>
-                <button
-                  className={`w-full sm:w-auto px-5 py-2 text-sm text-white cursor-pointer rounded-xl transition-colors ${
-                    postContent.trim() !== "" && selectedTag !== ""
-                      ? "bg-blue-600 hover:bg-blue-700"
-                      : "bg-blue-400 cursor-not-allowed"
-                  }`}
-                  onClick={handlePost}
-                  disabled={postContent.trim() === "" || selectedTag === ""}
-                >
-                  Post
-                </button>
-              </div>
+              </form>
             </div>
 
             {isLoading ? (
@@ -550,7 +585,13 @@ export default function StudentDashboard() {
                 <MessageSkeleton />
               </>
             ) : posts.length > 0 ? (
-              posts.map((post) => <MessageBox key={post.id} post={post} studentData={studentData} />)
+              posts.map((post) => (
+                <MessageBox
+                  key={post.id}
+                  post={post}
+                  studentData={studentData}
+                />
+              ))
             ) : (
               <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm text-center">
                 <p className="text-gray-500 dark:text-gray-400">
@@ -723,7 +764,9 @@ interface MessageBoxProps {
   post: Post;
 }
 
-const MessageBox: React.FC<MessageBoxProps & { studentData: StudentData | null }> = ({ post, studentData }) => {
+const MessageBox: React.FC<
+  MessageBoxProps & { studentData: StudentData | null }
+> = ({ post, studentData }) => {
   const [isSolved, setIsSolved] = React.useState<boolean>(post.solved);
   const [likes, setLikes] = React.useState<number>(post.likes);
 
@@ -778,12 +821,12 @@ const MessageBox: React.FC<MessageBoxProps & { studentData: StudentData | null }
         <div className="mt-4 pt-3 flex flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-3 sm:gap-0 border-t border-gray-100 dark:border-slate-800">
           <span
             className={`px-3 py-1 text-xs font-medium rounded-full ${
-              post.tag === "Maintenance"
+              post.type === "Maintenance"
                 ? "bg-blue-50 dark:bg-blue-500/10 text-blue-500 border border-blue-100 dark:border-blue-500/20"
                 : "bg-red-50 dark:bg-red-500/10 text-red-500 border border-red-100 dark:border-red-500/20"
             }`}
           >
-            {post.tag}
+            {post.type}
           </span>
           <div className="flex items-center gap-3 self-end sm:self-auto">
             <button
