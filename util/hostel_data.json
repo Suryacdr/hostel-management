@@ -129,8 +129,7 @@
         "roommateName": "Amit Patel"
       },
       "remarks": [],
-      "complaints": [],
-      "maintenance": [],
+      "issues": [],
       "profilePictureUrl": ""
     },
     "ST002": {
@@ -162,40 +161,7 @@
         "roommateName": "Rahul Sharma"
       },
       "remarks": [],
-      "complaints": [
-        {
-          "id": "C002",
-          "date": "2024-01-14",
-          "time": "18:45",
-          "message": "Water leakage from ceiling during rain",
-          "status": "in-progress",
-          "reportedTo": "HW001",
-          "priority": "high",
-          "assignedTo": "FA001"
-        }
-      ],
-      "maintenance": [
-        {
-          "id": "M002",
-          "date": "2024-01-08",
-          "time": "11:20",
-          "message": "Bathroom tap is leaking",
-          "status": "completed",
-          "reportedTo": "FA001",
-          "priority": "medium",
-          "completedDate": "2024-01-11",
-          "completedBy": "Maintenance Staff"
-        },
-        {
-          "id": "M003",
-          "date": "2024-01-16",
-          "time": "16:30",
-          "message": "Light bulb in study area needs replacement",
-          "status": "pending",
-          "reportedTo": "FA001",
-          "priority": "low"
-        }
-      ],
+      "issues": [],
       "profilePictureUrl": "",
       "bucket": []
     },
@@ -228,8 +194,7 @@
         "roommateName": "Pooja Singh"
       },
       "remarks": [],
-      "complaints": [],
-      "maintenance": [],
+      "issues": [],
       "profilePictureUrl": ""
     },
     "ST004": {
@@ -261,8 +226,7 @@
         "roommateName": "Neha Verma"
       },
       "remarks": [],
-      "complaints": [],
-      "maintenance": [],
+      "issues": [],
       "profilePictureUrl": "",
       "bucket": []
     }
