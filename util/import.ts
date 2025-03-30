@@ -139,15 +139,14 @@ async function uploadData() {
     // Upload roles
     const roles = ["chief_warden", "supervisors", "hostel_wardens", "floor_wardens", "floor_attendants"];
     for (const role of roles) {
-      for (const [id, userData] of Object.entries(jsonData.roles[role as keyof typeof jsonData.roles])) {
-        await db.collection(role).doc(id).set(userData as FirebaseFirestore.DocumentData);
+      for (const userData of Object.values(jsonData.roles[role as keyof typeof jsonData.roles])) {
+        await db.collection(role).add(userData as FirebaseFirestore.DocumentData);
       }
     }
 
     // Upload hostels
-    for (const [hostelId, hostelData] of Object.entries(jsonData.hostels)) {
-      const hostelRef = db.collection("hostels").doc(hostelId);
-      await hostelRef.set(hostelData);
+    for (const hostelData of Object.values(jsonData.hostels)) {
+      const hostelRef = await db.collection("hostels").add(hostelData);
 
       // Upload floors
       for (const [floorId, floorData] of Object.entries(hostelData.floors)) {
@@ -157,8 +156,8 @@ async function uploadData() {
     }
 
     // Upload students
-    for (const [studentId, studentData] of Object.entries(jsonData.students)) {
-      await db.collection("students").doc(studentId).set(studentData);
+    for (const studentData of Object.values(jsonData.students)) {
+      const studentRef = await db.collection("students").add(studentData);
 
       // Add student to their assigned room
       const { hostel, floor, roomNumber } = studentData.hostelDetails;
@@ -171,7 +170,7 @@ async function uploadData() {
         .doc(roomNumber);
 
       await roomRef.set({
-        occupants: admin.firestore.FieldValue.arrayUnion(studentId)
+        occupants: admin.firestore.FieldValue.arrayUnion(studentRef.id)
       }, { merge: true });
     }
 
