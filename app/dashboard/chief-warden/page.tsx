@@ -1,23 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react';
 import { auth } from "@/lib/firebase";
-import {
-  User,
-  Mail,
-  Phone,
-  Building2,
-  Users,
-  LogOut,
-  Menu,
-  X,
-  Search,
-} from "lucide-react";
+import { User, Mail, Phone, Building2, Users, LogOut, Menu, X } from "lucide-react";
 import Image from "next/image";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import ProfileImageUploader from "@/components/ProfileImageUploader";
 import { signOut, updateProfile } from "firebase/auth";
-import SearchModal from "@/components/SearchModal";
 
 interface StaffMember {
   fullName: string;
@@ -56,11 +45,8 @@ export default function ChiefWarden() {
   const [error, setError] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [profileData, setProfileData] = useState<ChiefWardenProfile | null>(
-    null
-  );
+  const [profileData, setProfileData] = useState<ChiefWardenProfile | null>(null);
   const [menuRef, setMenuRef] = useState<HTMLDivElement | null>(null);
-  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
 
   const handleSignOut = () => {
     signOut(auth)
@@ -92,14 +78,10 @@ export default function ChiefWarden() {
           photoURL: imageUrl,
         });
 
-        setProfileData((prev) =>
-          prev
-            ? {
-                ...prev,
-                profilePictureUrl: imageUrl,
-              }
-            : null
-        );
+        setProfileData(prev => prev ? {
+          ...prev,
+          profilePictureUrl: imageUrl
+        } : null);
 
         // Force a refresh of the dashboard data
         fetchDashboardData();
@@ -119,13 +101,13 @@ export default function ChiefWarden() {
 
       const token = await user.getIdToken(true);
       console.log("Fetching dashboard data with token...");
-
-      const response = await fetch("/api/fetch", {
-        method: "GET",
+      
+      const response = await fetch('/api/fetch', {
+        method: 'GET',
         headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
 
       if (!response.ok) {
@@ -136,21 +118,9 @@ export default function ChiefWarden() {
 
       const dashboardData = await response.json();
       console.log("Dashboard data received:", dashboardData);
-
-      // Ensure all expected arrays exist in the data
-      const processedData = {
-        ...dashboardData,
-        hostels: dashboardData.hostels || [],
-        supervisors: dashboardData.supervisors || [],
-        hostel_wardens: dashboardData.hostel_wardens || [],
-        floor_wardens: dashboardData.floor_wardens || [],
-        floor_attendants: dashboardData.floor_attendants || [],
-        issues: dashboardData.issues || [],
-      };
-
-      setData(processedData);
+      setData(dashboardData);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      setError(err instanceof Error ? err.message : 'An error occurred');
       console.error("Error fetching dashboard data:", err);
     } finally {
       setLoading(false);
@@ -179,7 +149,7 @@ export default function ChiefWarden() {
           role: "Chief Warden",
           profilePictureUrl: user.photoURL || "",
           accessLevel: "all",
-          assignedHostels: ["All Hostels"],
+          assignedHostels: ["All Hostels"]
         });
         fetchDashboardData();
       } else {
@@ -191,110 +161,78 @@ export default function ChiefWarden() {
   }, []);
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        Loading...
-      </div>
-    );
+    return <div className="flex justify-center items-center min-h-screen">Loading...</div>;
   }
 
   if (error) {
     return <div className="text-red-500 p-4">Error: {error}</div>;
   }
 
-  const totalIssues = data?.issues?.length || 0;
-  const pendingIssues =
-    data?.issues?.filter((issue) => !issue.solved)?.length || 0;
+  const totalIssues = (data?.issues?.length || 0);
+  const pendingIssues = data?.issues?.filter(issue => !issue.solved)?.length || 0;
   const resolvedIssues = totalIssues - pendingIssues;
 
   // Helper function to render staff cards
-  const renderStaffCards = (
-    staffMembers: StaffMember[] = [],
-    title: string
-  ) => {
+  const renderStaffCards = (staffMembers: StaffMember[] = [], title: string) => {
     console.log(`Rendering ${title}:`, staffMembers);
-
+    
     if (!staffMembers || staffMembers.length === 0) {
       return (
         <div className="mb-8">
           <h2 className="text-2xl font-bold mb-4">{title}</h2>
           <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow text-center">
-            <p className="text-gray-500 dark:text-gray-400">
-              No {title.toLowerCase()} found.
-            </p>
+            <p className="text-gray-500 dark:text-gray-400">No {title.toLowerCase()} found.</p>
           </div>
         </div>
       );
     }
-
+    
     return (
       <div className="mb-8">
         <h2 className="text-2xl font-bold mb-4">{title}</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {staffMembers.map((staff, index) => {
-            // Ensure we have the required fields, using fallbacks if needed
-            const fullName = staff.fullName || "Unknown";
-            const email = staff.email || "No email provided";
-            const phoneNumber = staff.phoneNumber || "No phone provided";
-            const role = staff.role || "Staff Member";
-            const assignedHostel = staff.assignedHostel;
-            const assignedFloors = staff.assignedFloors || [];
-            const reportsTo = staff.reportsTo || "";
-
-            return (
-              <div
-                key={index}
-                className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 className="text-xl font-semibold flex items-center gap-2">
-                      <User className="w-5 h-5" />
-                      {fullName}
-                    </h3>
-                    <span className="text-sm text-gray-500 dark:text-gray-400 mt-1 block">
-                      {role
-                        ? role
-                            .split("_")
-                            .map(
-                              (word) =>
-                                word.charAt(0).toUpperCase() + word.slice(1)
-                            )
-                            .join(" ")
-                        : "Staff Member"}
-                    </span>
-                  </div>
-                </div>
-                <div className="space-y-2 text-sm">
-                  <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-                    <Mail className="w-4 h-4" />
-                    {email}
-                  </p>
-                  <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-                    <Phone className="w-4 h-4" />
-                    {phoneNumber}
-                  </p>
-                  {assignedHostel && (
-                    <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-                      <Building2 className="w-4 h-4" />
-                      Hostel: {assignedHostel}
-                    </p>
-                  )}
-                  {assignedFloors && assignedFloors.length > 0 && (
-                    <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-                      <Users className="w-4 h-4" />
-                      Floors: {assignedFloors.join(", ")}
-                    </p>
-                  )}
-                  {reportsTo && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                      Reports to: {reportsTo}
-                    </p>
-                  )}
+          {staffMembers.map((staff, index) => (
+            <div key={index} className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="text-xl font-semibold flex items-center gap-2">
+                    <User className="w-5 h-5" />
+                    {staff.fullName}
+                  </h3>
+                  <span className="text-sm text-gray-500 dark:text-gray-400 mt-1 block">
+                    {staff.role ? staff.role.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : 'Staff Member'}
+                  </span>
                 </div>
               </div>
-            );
-          })}
+              <div className="space-y-2 text-sm">
+                <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                  <Mail className="w-4 h-4" />
+                  {staff.email}
+                </p>
+                <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                  <Phone className="w-4 h-4" />
+                  {staff.phoneNumber}
+                </p>
+                {staff.assignedHostel && (
+                  <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                    <Building2 className="w-4 h-4" />
+                    Hostel: {staff.assignedHostel}
+                  </p>
+                )}
+                {staff.assignedFloors && staff.assignedFloors.length > 0 && (
+                  <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                    <Users className="w-4 h-4" />
+                    Floors: {staff.assignedFloors.join(', ')}
+                  </p>
+                )}
+                {staff.reportsTo && (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                    Reports to: {staff.reportsTo}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -330,12 +268,6 @@ export default function ChiefWarden() {
               <div className="flex items-center gap-3 relative mt-2 md:mt-0">
                 <ThemeToggle />
                 <button
-                  onClick={() => setIsSearchModalOpen(true)}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors"
-                >
-                  <Search size={20} />
-                </button>
-                <button
                   onClick={handleMenuOpen}
                   className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors"
                 >
@@ -367,28 +299,16 @@ export default function ChiefWarden() {
 
             <div className="flex flex-wrap gap-2 md:gap-4 mt-4 md:mt-6">
               <div className="bg-gray-100 dark:bg-slate-800 p-2 md:p-3 rounded-xl text-center flex-1 shadow-sm min-w-[100px]">
-                <p className="text-lg md:text-xl font-semibold">
-                  {data?.hostels?.length || 0}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Hostels
-                </p>
+                <p className="text-lg md:text-xl font-semibold">{data?.hostels?.length || 0}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Hostels</p>
               </div>
               <div className="bg-gray-100 dark:bg-slate-800 p-2 md:p-3 rounded-xl text-center flex-1 shadow-sm min-w-[100px]">
-                <p className="text-lg md:text-xl font-semibold text-yellow-500">
-                  {pendingIssues}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Pending Issues
-                </p>
+                <p className="text-lg md:text-xl font-semibold text-yellow-500">{pendingIssues}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Pending Issues</p>
               </div>
               <div className="bg-gray-100 dark:bg-slate-800 p-2 md:p-3 rounded-xl text-center flex-1 shadow-sm min-w-[100px]">
-                <p className="text-lg md:text-xl font-semibold text-green-500">
-                  {resolvedIssues}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Resolved Issues
-                </p>
+                <p className="text-lg md:text-xl font-semibold text-green-500">{resolvedIssues}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Resolved Issues</p>
               </div>
             </div>
           </div>
@@ -398,10 +318,10 @@ export default function ChiefWarden() {
       {/* Main Content */}
       <div className="flex-1 max-w-7xl w-full mx-auto px-4 pb-8">
         {/* Staff Management Sections */}
-        {renderStaffCards(data?.supervisors, "Supervisors")}
-        {renderStaffCards(data?.hostel_wardens, "Hostel Wardens")}
-        {renderStaffCards(data?.floor_wardens, "Floor Wardens")}
-        {renderStaffCards(data?.floor_attendants, "Floor Attendants")}
+        {renderStaffCards(data?.supervisors, 'Supervisors')}
+        {renderStaffCards(data?.hostel_wardens, 'Hostel Wardens')}
+        {renderStaffCards(data?.floor_wardens, 'Floor Wardens')}
+        {renderStaffCards(data?.floor_attendants, 'Floor Attendants')}
 
         {/* Hostels Overview */}
         <div className="mb-8">
@@ -409,10 +329,7 @@ export default function ChiefWarden() {
           {data?.hostels && data.hostels.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {data.hostels.map((hostel) => (
-                <div
-                  key={hostel.id}
-                  className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow"
-                >
+                <div key={hostel.id} className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
                   <h3 className="text-xl font-semibold mb-4">{hostel.name}</h3>
                   <div className="space-y-2">
                     <p className="flex items-center gap-2">
@@ -437,9 +354,7 @@ export default function ChiefWarden() {
             </div>
           ) : (
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow text-center">
-              <p className="text-gray-500 dark:text-gray-400">
-                No hostels found.
-              </p>
+              <p className="text-gray-500 dark:text-gray-400">No hostels found.</p>
             </div>
           )}
         </div>
@@ -452,57 +367,27 @@ export default function ChiefWarden() {
               <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead className="bg-gray-50 dark:bg-gray-900">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                      ID
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                      Student
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                      Type
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                      Message
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                      Created At
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                      Status
-                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">ID</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Student</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Type</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Message</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                  {data.issues.map((issue: any) => (
+                  {data.issues.slice(0, 10).map((issue: any) => (
                     <tr key={issue.id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        {String(issue.id).substring(0, 8)}...
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        {issue.studentName}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        {issue.type}
-                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">{issue.id.substring(0, 8)}...</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">{issue.studentName}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">{issue.type}</td>
                       <td className="px-6 py-4 text-sm">{issue.message}</td>
-                      <td className="px-6 py-4 text-sm">
-                        {new Date(issue.timestamp).toLocaleString('en-US', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            issue.solved
-                              ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                              : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-                          }`}
-                        >
-                          {issue.solved ? "Resolved" : "Pending"}
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          issue.solved
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                        }`}>
+                          {issue.solved ? 'Resolved' : 'Pending'}
                         </span>
                       </td>
                     </tr>
@@ -512,20 +397,11 @@ export default function ChiefWarden() {
             </div>
           ) : (
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow text-center">
-              <p className="text-gray-500 dark:text-gray-400">
-                No issues found.
-              </p>
+              <p className="text-gray-500 dark:text-gray-400">No issues found.</p>
             </div>
           )}
         </div>
       </div>
-
-      {/* Search Modal */}
-      <SearchModal
-        isOpen={isSearchModalOpen}
-        onClose={() => setIsSearchModalOpen(false)}
-        data={data || {}}
-      />
 
       {/* Edit Profile Modal */}
       {isModalOpen && (
@@ -539,9 +415,7 @@ export default function ChiefWarden() {
             </button>
 
             <div className="p-6">
-              <h2 className="text-xl font-bold mb-6 dark:text-white">
-                Edit Profile Photo
-              </h2>
+              <h2 className="text-xl font-bold mb-6 dark:text-white">Edit Profile Photo</h2>
               <ProfileImageUploader
                 currentImageUrl={profileData?.profilePictureUrl || ""}
                 studentName={profileData?.fullName || ""}
