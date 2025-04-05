@@ -42,12 +42,20 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Get user ID from the decoded token
+        // Get user ID and role from the decoded token
         const uid = decodedToken.uid;
+        const role = decodedToken.role || decodedToken.customClaims?.role;
+
+        if (!role) {
+            return NextResponse.json(
+                { error: "User role not found" },
+                { status: 400 }
+            );
+        }
 
         // Get request body
         const body = await request.json();
-        const { imageData, studentName, roomNumber } = body;
+        const { imageData } = body;
 
         if (!imageData) {
             return NextResponse.json(
@@ -56,14 +64,13 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        console.log("Processing image upload for user:", uid);
-        console.log("Student name:", studentName);
-        console.log("Room number:", roomNumber);
+        console.log("Processing image upload for user:", uid, "with role:", role);
 
         try {
-            // Generate folder path and public ID
-            const folderPath = getStudentImagePath(roomNumber, studentName);
-            const publicId = studentName.replace(/\s+/g, '_').toLowerCase();
+            // Generate folder path and public ID based on role
+            const userRecord = await admin.auth().getUser(uid);
+            const userName = userRecord.displayName?.replace(/\s+/g, '_').toLowerCase() || uid;
+            const folderPath = `hms/profiles/${role}/${userName}`;
 
             console.log("Uploading to Cloudinary folder:", folderPath);
 
@@ -71,55 +78,80 @@ export async function POST(request: NextRequest) {
             const uploadResult = await uploadImageToCloudinary(
                 imageData,
                 folderPath,
-                publicId
+                userName
             );
 
             console.log("Cloudinary upload successful");
-
-            // Get the secure URL from the Cloudinary response
             const secureUrl = uploadResult.secure_url;
             console.log("Image URL:", secureUrl);
 
             // Use Firebase Admin to update Firestore
             try {
                 const db = admin.firestore();
+                let userCollection;
 
-                // Find the student document by UID
-                let studentSnapshot = await db.collection("students").where("uid", "==", uid).get();
-
-                const userRecord = await admin.auth().getUser(uid);
-                if (studentSnapshot.empty && userRecord.email) {
-                    studentSnapshot = await db.collection("students").where("email", "==", userRecord.email).get();
+                // Determine the correct collection based on role
+                switch (role) {
+                    case 'chief_warden':
+                        userCollection = 'chief_warden'; // Fixed: Changed from 'chief_wardens' to 'chief_warden'
+                        break;
+                    case 'supervisor':
+                        userCollection = 'supervisors';
+                        break;
+                    case 'hostel_warden':
+                        userCollection = 'hostel_wardens';
+                        break;
+                    case 'floor_warden':
+                        userCollection = 'floor_wardens';
+                        break;
+                    case 'floor_attendant':
+                        userCollection = 'floor_attendants';
+                        break;
+                    case 'student':
+                        userCollection = 'students';
+                        break;
+                    default:
+                        return NextResponse.json(
+                            { error: "Invalid user role" },
+                            { status: 400 }
+                        );
                 }
 
-                if (studentSnapshot.empty) {
-                    console.error("Student not found with UID:", uid);
+                // Find the user document
+                let userSnapshot = await db.collection(userCollection).where("uid", "==", uid).get();
+
+                if (userSnapshot.empty && userRecord.email) {
+                    userSnapshot = await db.collection(userCollection).where("email", "==", userRecord.email).get();
+                }
+
+                if (userSnapshot.empty) {
+                    console.error(`${role} not found with UID:`, uid);
                     return NextResponse.json(
-                        { error: "Student not found" },
+                        { error: `${role} not found` },
                         { status: 404 }
                     );
                 }
 
-                // Get the student document ID
-                const studentDoc = studentSnapshot.docs[0];
-                const studentId = studentDoc.id;
-                const studentData = studentDoc.data();
+                // Get the user document ID
+                const userDoc = userSnapshot.docs[0];
+                const userId = userDoc.id;
+                const userData = userDoc.data();
 
-                // Ensure the UID field is present and correct
+                // Prepare update data
                 const updateData: { profilePictureUrl: string; uid?: string } = {
                     profilePictureUrl: secureUrl
                 };
 
                 // If UID is missing or mismatched, add it to the update
-                if (!studentData.uid || studentData.uid !== uid) {
-                    console.log(`Ensuring correct UID (${uid}) for student ${studentId}`);
+                if (!userData.uid || userData.uid !== uid) {
+                    console.log(`Ensuring correct UID (${uid}) for user ${userId}`);
                     updateData.uid = uid;
                 }
 
-                // Update the student document with the profile picture URL and ensure UID is set
-                await db.collection("students").doc(studentId).update(updateData);
+                // Update the document with the profile picture URL
+                await db.collection(userCollection).doc(userId).update(updateData);
 
-                console.log("Profile updated in Firestore successfully using Admin SDK for student ID:", studentId);
+                console.log(`Profile updated in Firestore successfully for ${role} with ID:`, userId);
 
                 // Return success response
                 return NextResponse.json({
