@@ -74,7 +74,7 @@ export default function Home() {
           </p>
         </div>
         <div className="text-sm opacity-70">
-          © 2024 All rights reserved.
+          © 2025 All rights reserved.
         </div>
       </div>
 
