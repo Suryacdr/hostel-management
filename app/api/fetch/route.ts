@@ -152,139 +152,102 @@ export async function GET(request: NextRequest) {
             }
 
             case "chief_warden": {
-                try {
-                    console.log("Fetching data for chief warden:", uid);
+                // Fetch all hostels data
+                const hostelsSnapshot = await db.collection("hostels").get();
+                const hostels = hostelsSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
 
-                    // Fetch all hostels data
-                    console.log("Attempting to fetch hostels...");
-                    const hostelsSnapshot = await db.collection("hostels").get();
-                    const hostels = hostelsSnapshot.docs.map(doc => {
-                        console.log("Hostel doc:", doc.id, doc.data());
-                        return {
-                            id: doc.id,
-                            ...doc.data()
-                        };
-                    });
-                    console.log("Fetched hostels:", hostels);
+                // Fetch staff data with role filters
+                const [supervisorsSnap, hostelWardensSnap, floorWardensSnap, floorAttendantsSnap] = await Promise.all([
+                    db.collection("supervisors").where("role", "==", "supervisor").get(),
+                    db.collection("hostel_wardens").where("role", "==", "hostel_warden").get(),
+                    db.collection("floor_wardens").where("role", "==", "floor_warden").get(),
+                    db.collection("floor_attendants").where("role", "==", "floor_attendant").get()
+                ]);
 
-                    // Fetch staff data directly from staff collection with role filters
-                    console.log("Attempting to fetch staff data...");
-                    const [supervisorsSnap, hostelWardensSnap, floorWardensSnap, floorAttendantsSnap] = await Promise.all([
-                        db.collection("staff").where("role", "==", "supervisor").get(),
-                        db.collection("staff").where("role", "==", "hostel_warden").get(),
-                        db.collection("staff").where("role", "==", "floor_warden").get(),
-                        db.collection("staff").where("role", "==", "floor_attendant").get()
-                    ]);
+                // Map staff data
+                const supervisorsData = supervisorsSnap.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                
+                const hostelWardensData = hostelWardensSnap.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                
+                const floorWardensData = floorWardensSnap.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                
+                const floorAttendantsData = floorAttendantsSnap.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
 
-                    // Map staff data
-                    const supervisorsData = supervisorsSnap.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data()
-                    }));
-                    
-                    const hostelWardensData = hostelWardensSnap.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data()
-                    }));
-                    
-                    const floorWardensData = floorWardensSnap.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data()
-                    }));
-                    
-                    const floorAttendantsData = floorAttendantsSnap.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data()
-                    }));
+                // Fetch all students for issues
+                const studentsSnapshot = await db.collection("students").get();
+                const allIssues: any[] = [];
 
-                    console.log("Staff data retrieved:", {
-                        supervisors: supervisorsData.length,
-                        hostelWardens: hostelWardensData.length,
-                        floorWardens: floorWardensData.length,
-                        floorAttendants: floorAttendantsData.length
-                    });
+                studentsSnapshot.docs.forEach(doc => {
+                    const studentData = doc.data();
+                    const studentId = doc.id;
+                    const studentName = studentData.fullName;
 
-                    // Fetch all students for issues
-                    console.log("Attempting to fetch students...");
-                    const studentsSnapshot = await db.collection("students").get();
-                    const allIssues: any[] = [];
-                    console.log("Fetched students:", studentsSnapshot.docs.length);
+                    // Collect all types of issues
+                    if (studentData.issues && Array.isArray(studentData.issues)) {
+                        const formattedIssues = studentData.issues.map((issue: any) => ({
+                            ...issue,
+                            id: issue.id || `${studentId}-${Date.now()}`,
+                            studentId,
+                            studentName,
+                            timestamp: formatTimestamp(issue.timestamp || issue.date || new Date())
+                        }));
+                        allIssues.push(...formattedIssues);
+                    }
 
-                    studentsSnapshot.docs.forEach(doc => {
-                        const studentData = doc.data();
-                        const studentId = doc.id;
-                        const studentName = studentData.fullName;
-                        console.log("Processing student:", studentId, studentName);
+                    // Include complaints as issues
+                    if (studentData.complaints && Array.isArray(studentData.complaints)) {
+                        const formattedComplaints = studentData.complaints.map((complaint: any) => ({
+                            ...complaint,
+                            id: complaint.id || `${studentId}-complaint-${Date.now()}`,
+                            type: 'complaint',
+                            studentId,
+                            studentName,
+                            timestamp: formatTimestamp(complaint.timestamp || complaint.date || new Date())
+                        }));
+                        allIssues.push(...formattedComplaints);
+                    }
 
-                        // Collect all types of issues
-                        if (studentData.issues && Array.isArray(studentData.issues)) {
-                            const formattedIssues = studentData.issues.map((issue: any) => ({
-                                ...issue,
-                                id: issue.id || `${studentId}-${Date.now()}`,
-                                studentId,
-                                studentName,
-                                timestamp: formatTimestamp(issue.timestamp || issue.date || new Date())
-                            }));
-                            allIssues.push(...formattedIssues);
-                        }
+                    // Include maintenance requests as issues
+                    if (studentData.maintenance && Array.isArray(studentData.maintenance)) {
+                        const formattedMaintenance = studentData.maintenance.map((maintenance: any) => ({
+                            ...maintenance,
+                            id: maintenance.id || `${studentId}-maintenance-${Date.now()}`,
+                            type: 'maintenance',
+                            studentId,
+                            studentName,
+                            timestamp: formatTimestamp(maintenance.timestamp || maintenance.date || new Date())
+                        }));
+                        allIssues.push(...formattedMaintenance);
+                    }
+                });
 
-                        // Include complaints as issues
-                        if (studentData.complaints && Array.isArray(studentData.complaints)) {
-                            const formattedComplaints = studentData.complaints.map((complaint: any) => ({
-                                ...complaint,
-                                id: complaint.id || `${studentId}-complaint-${Date.now()}`,
-                                type: 'complaint',
-                                studentId,
-                                studentName,
-                                timestamp: formatTimestamp(complaint.timestamp || complaint.date || new Date())
-                            }));
-                            allIssues.push(...formattedComplaints);
-                        }
-
-                        // Include maintenance requests as issues
-                        if (studentData.maintenance && Array.isArray(studentData.maintenance)) {
-                            const formattedMaintenance = studentData.maintenance.map((maintenance: any) => ({
-                                ...maintenance,
-                                id: maintenance.id || `${studentId}-maintenance-${Date.now()}`,
-                                type: 'maintenance',
-                                studentId,
-                                studentName,
-                                timestamp: formatTimestamp(maintenance.timestamp || maintenance.date || new Date())
-                            }));
-                            allIssues.push(...formattedMaintenance);
-                        }
-                    });
-
-                    console.log("Total issues collected:", allIssues.length);
-
-                    responseData = {
-                        hostels,
-                        supervisors: supervisorsData,
-                        hostel_wardens: hostelWardensData,
-                        floor_wardens: floorWardensData,
-                        floor_attendants: floorAttendantsData,
-                        issues: allIssues.sort((a, b) => {
-                            const dateA = new Date(a.timestamp);
-                            const dateB = new Date(b.timestamp);
-                            return dateB.getTime() - dateA.getTime();
-                        })
-                    };
-
-                    console.log("Response data prepared successfully", {
-                        hostelsCount: hostels.length,
-                        staffCounts: {
-                            supervisors: supervisorsData.length,
-                            hostelWardens: hostelWardensData.length,
-                            floorWardens: floorWardensData.length,
-                            floorAttendants: floorAttendantsData.length
-                        },
-                        issuesCount: allIssues.length
-                    });
-
-                } catch (error) {
-                    console.error("Error in chief warden data fetch:", error);
-                    throw error;
-                }
+                responseData = {
+                    hostels,
+                    supervisors: supervisorsData,
+                    hostel_wardens: hostelWardensData,
+                    floor_wardens: floorWardensData,
+                    floor_attendants: floorAttendantsData,
+                    issues: allIssues.sort((a, b) => {
+                        const dateA = new Date(a.timestamp);
+                        const dateB = new Date(b.timestamp);
+                        return dateB.getTime() - dateA.getTime();
+                    })
+                };
                 break;
             }
 
