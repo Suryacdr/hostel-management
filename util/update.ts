@@ -47,6 +47,13 @@ interface Student {
         status: string;
         isSolved: boolean;
         completedDate?: string;
+        remarks?: string;
+        hostelDetails: {  // Replace simple roomNumber with detailed location
+            hostel: string;
+            floor: string;
+            roomNumber: string;
+        };
+        category?: string;  // Category specifically for maintenance type
     }[];
     bucket: Bucket[];
 }
