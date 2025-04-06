@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@mui/material": "^7.0.1",
     "@tailwindcss/postcss": "^4.0.0",
     "cloudinary": "^2.6.0",
     "firebase": "^11.2.0",
