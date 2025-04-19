@@ -35,6 +35,7 @@ interface Post {
   timestamp: Date;
   author: string;
   solved: boolean;
+  completeDate?: string;
   hostelDetails?: { hostel: string; floor: string; roomNumber: string };
   category?: string;
 }
@@ -49,6 +50,7 @@ interface StudentData {
   floor: string;
   profilePictureUrl: string;
   registrationNumber: string;
+  hostel?: string; 
   hostelDetails?: { hostel: string; floor: string; roomNumber: string };
 }
 
@@ -79,20 +81,22 @@ const PostForm = React.memo(
     const hostelDetails = React.useMemo(() => {
       if (!studentData) return null;
 
-      // Extract from studentData.hostelDetails if it exists
-      if (studentData.hostelDetails) {
-        return {
-          hostel: studentData.hostelDetails.hostel || "",
-          floor: studentData.hostelDetails.floor || "",
-          roomNumber: studentData.hostelDetails.roomNumber || "",
-        };
-      }
+      // Use hostelDetails object or extract from room
+      const hostel =
+        studentData.hostelDetails?.hostel ||
+        (studentData.room?.split("-")[0] || "");
+      const floor =
+        studentData.hostelDetails?.floor ||
+        "";
+      const roomNumber =
+        studentData.hostelDetails?.roomNumber ||
+        studentData.room ||
+        "";
 
-      // Fallback to basic room info if detailed structure isn't available
       return {
-        hostel: studentData.room || "",
-        floor: studentData.floor || "",
-        roomNumber: studentData.room || "",
+        hostel,
+        floor,
+        roomNumber,
       };
     }, [studentData]);
 
@@ -113,14 +117,12 @@ const PostForm = React.memo(
           hostelDetails,
           selectedTag === "Maintenance" ? category : undefined
         );
-        // Only clear form fields if post was successful
         setPostContent("");
         setSelectedTag("");
         setCategory("");
         setIsExpanded(false);
       } catch (error) {
         console.error("Error posting:", error);
-        // Error handling is done in the parent component
       }
     };
 
@@ -470,6 +472,7 @@ export default function StudentDashboard() {
       const token = await user.getIdToken(true);
       console.log("Token obtained successfully");
 
+      // Fetch basic student profile data
       const response = await fetch("/api/fetch", {
         method: "GET",
         headers: {
@@ -485,81 +488,73 @@ export default function StudentDashboard() {
       }
 
       const data = await response.json();
-      console.log("Received data:", data);
       console.log("Student data received:", data.student);
-      console.log("Registration number:", data.student?.registrationNumber);
-
       setStudentData(data.student);
-      console.log(
-        "Updated student data with profile picture:",
-        data.student.profilePictureUrl
-      );
 
-      const issuesArray = Array.isArray(data.issues) ? data.issues : [];
-      const complaintsArray = Array.isArray(data.complaints)
-        ? data.complaints
-        : [];
-      const maintenanceArray = Array.isArray(data.maintenance)
-        ? data.maintenance
-        : [];
+      // Fetch all student's issues using the new dedicated endpoint
+      const issuesResponse = await fetch("/api/issue/all-issues", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
 
-      let allPosts = [];
-
-      if (issuesArray.length > 0) {
-        allPosts = issuesArray.map((issue: any) => {
-          // Create a default hostelDetails if none exists in the issue
-          const hostelDetails = issue.hostelDetails || (studentData?.hostelDetails ? 
-            { ...studentData.hostelDetails } : 
-            {
-              hostel: studentData?.room?.split('-')?.[0] || '',
-              floor: studentData?.floor || '',
-              roomNumber: studentData?.room || ''
-            });
-
-          return {
-            id: issue.id,
-            content: issue.message,
-            type: normalizePostType(issue.type),
-            timestamp: new Date(issue.timestamp),
-            author: data.student?.name || "You",
-            likes: issue.likes || 0,
-            solved: issue.solved || false,
-            hostelDetails: hostelDetails,
-            category: issue.category,
-          };
-        });
-      } else {
-        const formattedComplaints = complaintsArray.map((complaint: any) => ({
-          id: complaint.id,
-          content: complaint.message,
-          type: "Complaint" as const,
-          timestamp: new Date(complaint.timestamp),
-          author: data.student?.name || "You",
-          likes: complaint.likes || 0,
-          solved: complaint.solved || false,
-        }));
-
-        const formattedMaintenance = maintenanceArray.map(
-          (maintenance: any) => ({
-            id: maintenance.id,
-            content: maintenance.message,
-            type: "Maintenance" as const,
-            timestamp: new Date(maintenance.timestamp),
-            author: data.student?.name || "You",
-            likes: maintenance.likes || 0,
-            solved: maintenance.solved || false,
-          })
-        );
-
-        allPosts = [...formattedComplaints, ...formattedMaintenance];
+      if (!issuesResponse.ok) {
+        console.error("Error fetching issues:", await issuesResponse.text());
+        throw new Error("Failed to fetch issues data");
       }
 
-      allPosts.sort(
+      const issuesData = await issuesResponse.json();
+      const allIssues = issuesData.maintenanceIssues || [];
+
+      // Format the issues for display
+      const formattedPosts = allIssues.map((issue: any) => {
+        // Prefer issue.hostel, issue.floor, etc. if available, else fallback to studentData
+        const hostel =
+          issue.hostel ||
+          data.student?.hostel ||
+          data.student?.hostelDetails?.hostel ||
+          (data.student?.room?.split("-")[0] || "");
+        const floor =
+          issue.floor ||
+          data.student?.floor ||
+          data.student?.hostelDetails?.floor ||
+          "";
+        const roomNumber =
+          issue.room ||
+          issue.studentRoom ||
+          data.student?.hostelDetails?.roomNumber ||
+          data.student?.room ||
+          "";
+
+        const hostelDetails = {
+          hostel,
+          floor,
+          roomNumber,
+        };
+
+        return {
+          id: issue.id,
+          content: issue.message,
+          type: normalizePostType(issue.type),
+          timestamp: new Date(issue.timestamp),
+          author: data.student?.name || "You",
+          likes: issue.likes || 0,
+          solved: issue.solved || issue.isSolved || false,
+          completeDate: issue.completeDate || null,
+          hostelDetails,
+          category: issue.category,
+        };
+      });
+
+      // Sort posts by timestamp (newest first)
+      formattedPosts.sort(
         (a: Post, b: Post) => b.timestamp.getTime() - a.timestamp.getTime()
       );
 
-      setPosts(allPosts);
-      console.log("Posts loaded:", allPosts.length);
+      setPosts(formattedPosts);
+      console.log("Posts loaded:", formattedPosts.length);
     } catch (error) {
       console.error("Error fetching student data:", error);
     } finally {
@@ -1189,9 +1184,55 @@ const MessageBox: React.FC<
 > = ({ post, studentData }) => {
   const [isSolved, setIsSolved] = React.useState<boolean>(post.solved);
   const [isLiked, setIsLiked] = React.useState<boolean>(false);
+  const [isUpdating, setIsUpdating] = React.useState<boolean>(false);
+  const [updateError, setUpdateError] = React.useState<string | null>(null);
+  const [completionDate, setCompletionDate] = React.useState<string | null>(post.completeDate || null);
 
-  const toggleSolvedStatus = (): void => {
-    setIsSolved((prev) => !prev);
+  const toggleSolvedStatus = async () => {
+    try {
+      setIsUpdating(true);
+      setUpdateError(null);
+      
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error("User not logged in");
+      }
+
+      const token = await user.getIdToken();
+      const newStatus = !isSolved;
+      const newCompletionDate = newStatus ? new Date().toISOString() : null;
+      
+      const response = await fetch("/api/issue/update-issue", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          issueId: post.id,
+          solved: newStatus,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to update issue status");
+      }
+
+      // Update local state
+      setIsSolved(newStatus);
+      setCompletionDate(newCompletionDate);
+      console.log(`Issue marked as ${newStatus ? "solved" : "unsolved"}`);
+      
+    } catch (error) {
+      console.error("Error updating issue status:", error);
+      setUpdateError(error instanceof Error ? error.message : "Failed to update status");
+      setIsSolved(post.solved); // Revert to original state
+      setCompletionDate(post.completeDate || null); // Convert undefined to null
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const formatDate = (date: Date): string => {
@@ -1217,10 +1258,10 @@ const MessageBox: React.FC<
   };
 
   React.useEffect(() => {
-    console.log(
-      `Post type: ${post.type}, isMaintenance: ${post.type === "Maintenance"}`
-    );
-  }, [post.type]);
+    // Keep local state in sync with prop changes
+    setIsSolved(post.solved);
+    setCompletionDate(post.completeDate || null);
+  }, [post.solved, post.completeDate]);
 
   return (
     <div className="bg-white dark:bg-slate-800 p-4 md:p-5 rounded-xl shadow-md hover:shadow-lg transition-shadow">
@@ -1318,21 +1359,65 @@ const MessageBox: React.FC<
             )}
             {post.type}
           </span>
-          <div className="flex items-center gap-2 self-end">
-            <button
-              onClick={toggleSolvedStatus}
-              className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${
-                isSolved
-                  ? "bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-300"
-                  : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-green-50 dark:hover:bg-green-900/30 hover:text-green-600 dark:hover:text-green-300"
-              }`}
-            >
-              <CheckCircle
-                size={14}
-                className={isSolved ? "fill-green-600 dark:fill-green-300" : ""}
-              />
-              {isSolved ? "Solved" : "Mark as Solved"}
-            </button>
+          <div className="flex flex-col items-end gap-1">
+            {isSolved && completionDate && (
+              <div className="text-xs text-green-600 dark:text-green-400">
+                Completed: {new Date(completionDate).toLocaleDateString()}
+              </div>
+            )}
+            
+            <div className="flex items-center gap-2">
+              {updateError && (
+                <span className="text-xs text-red-500 dark:text-red-400">
+                  {updateError}
+                </span>
+              )}
+              <button
+                onClick={toggleSolvedStatus}
+                disabled={isUpdating}
+                className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${
+                  isUpdating 
+                    ? "bg-gray-100 dark:bg-gray-700 opacity-60 cursor-wait" 
+                    : isSolved
+                      ? "bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-300"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-green-50 dark:hover:bg-green-900/30 hover:text-green-600 dark:hover:text-green-300"
+                }`}
+              >
+                {isUpdating ? (
+                  <span className="flex items-center">
+                    <svg
+                      className="animate-spin -ml-0.5 mr-1.5 h-3 w-3"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    Updating...
+                  </span>
+                ) : (
+                  <>
+                    <CheckCircle
+                      size={14}
+                      className={isSolved ? "fill-green-600 dark:fill-green-300" : ""}
+                    />
+                    {isSolved ? "Solved" : "Mark as Solved"}
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>
