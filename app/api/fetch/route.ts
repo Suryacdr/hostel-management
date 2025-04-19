@@ -39,6 +39,25 @@ type Issue = {
     [key: string]: any;
 };
 
+type Floor = {
+    id: string;
+    number?: string | number;
+    hostelId?: string;
+    name?: string;
+    [key: string]: any; // For other properties that might exist on floor documents
+};
+
+type Student = {
+    id: string;
+    name: string;
+    email: string;
+    course?: string;
+    department?: string;
+    room?: string;
+    hostel?: string;
+    profilePictureUrl?: string;
+};
+
 // Helper functions
 const formatTimestamp = (timestamp: any): Date => {
     return timestamp?.toDate?.() || new Date();
@@ -117,26 +136,37 @@ export async function GET(request: NextRequest) {
 
                 const studentDoc = studentSnapshot.docs[0];
                 const studentData = studentDoc.data();
-                const complaints = studentData.complaints || [];
-                const maintenance = studentData.maintenance || [];
+                // Normalize fields for frontend
+                const name = studentData.fullName || studentData.name || "Unknown Student";
+                const email = studentData.email || "";
+                const room =
+                    studentData.hostelDetails?.roomNumber ||
+                    studentData.room ||
+                    "";
+                const hostel =
+                    studentData.hostelDetails?.hostel ||
+                    studentData.hostel ||
+                    "";
+                const profilePictureUrl = studentData.profilePictureUrl || "";
 
                 responseData = {
                     student: {
                         id: studentDoc.id,
-                        name: studentData.fullName,
-                        email: studentData.email,
+                        name,
+                        email,
                         course: studentData.course,
                         registrationNumber: studentData.registrationNumber || studentData.regestrationNumber || "",
                         department: studentData.course?.split(" ").pop() || "",
-                        room: studentData.hostelDetails?.roomNumber || "",
-                        profilePictureUrl: studentData.profilePictureUrl || ""
+                        room,
+                        hostel,
+                        profilePictureUrl
                     },
-                    complaints: complaints.map((complaint: any) => ({
+                    complaints: (studentData.complaints || []).map((complaint: any) => ({
                         id: complaint.id,
                         ...complaint,
                         timestamp: formatTimestamp(complaint.timestamp)
                     })),
-                    maintenance: maintenance.map((issue: any) => ({
+                    maintenance: (studentData.maintenance || []).map((issue: any) => ({
                         id: issue.id,
                         ...issue,
                         timestamp: formatTimestamp(issue.timestamp)
@@ -195,7 +225,16 @@ export async function GET(request: NextRequest) {
                 studentsSnapshot.docs.forEach(doc => {
                     const studentData = doc.data();
                     const studentId = doc.id;
-                    const studentName = studentData.fullName;
+                    const studentName = studentData.fullName || studentData.name || "Unknown Student";
+                    const studentEmail = studentData.email || "";
+                    const studentRoom =
+                        studentData.hostelDetails?.roomNumber ||
+                        studentData.room ||
+                        "";
+                    const hostel =
+                        studentData.hostelDetails?.hostel ||
+                        studentData.hostel ||
+                        "";
 
                     // Collect all types of issues
                     if (studentData.issues && Array.isArray(studentData.issues)) {
@@ -204,6 +243,9 @@ export async function GET(request: NextRequest) {
                             id: issue.id || `${studentId}-${Date.now()}`,
                             studentId,
                             studentName,
+                            studentEmail,
+                            studentRoom,
+                            hostel,
                             timestamp: formatTimestamp(issue.timestamp || issue.date || new Date())
                         }));
                         allIssues.push(...formattedIssues);
@@ -217,6 +259,9 @@ export async function GET(request: NextRequest) {
                             type: 'complaint',
                             studentId,
                             studentName,
+                            studentEmail,
+                            studentRoom,
+                            hostel,
                             timestamp: formatTimestamp(complaint.timestamp || complaint.date || new Date())
                         }));
                         allIssues.push(...formattedComplaints);
@@ -230,6 +275,9 @@ export async function GET(request: NextRequest) {
                             type: 'maintenance',
                             studentId,
                             studentName,
+                            studentEmail,
+                            studentRoom,
+                            hostel,
                             timestamp: formatTimestamp(maintenance.timestamp || maintenance.date || new Date())
                         }));
                         allIssues.push(...formattedMaintenance);
@@ -253,17 +301,22 @@ export async function GET(request: NextRequest) {
 
             case "hostel_warden": {
                 // Get warden's assigned hostel
-                const wardenDoc = await db.collection("staff").doc(uid).get();
+                let wardenSnapshot = await db.collection("hostel_wardens").where("uid", "==", uid).get();
 
-                if (!wardenDoc.exists) {
+                if (wardenSnapshot.empty && userRecord.email) {
+                    wardenSnapshot = await db.collection("hostel_wardens").where("email", "==", userRecord.email).get();
+                }
+
+                if (wardenSnapshot.empty) {
                     return NextResponse.json(
                         { error: "Warden data not found" },
                         { status: 404 }
                     );
                 }
 
+                const wardenDoc = wardenSnapshot.docs[0];
                 const wardenData = wardenDoc.data();
-                const hostelId = wardenData?.assignedHostels?.[0];
+                const hostelId = wardenData?.assignedHostel || wardenData?.assignedHostels?.[0];
 
                 if (!hostelId) {
                     return NextResponse.json(
@@ -316,15 +369,20 @@ export async function GET(request: NextRequest) {
 
             case "floor_warden": {
                 // Get floor warden's assigned floors
-                const floorWardenDoc = await db.collection("staff").doc(uid).get();
+                let floorWardenSnapshot = await db.collection("floor_wardens").where("uid", "==", uid).get();
 
-                if (!floorWardenDoc.exists) {
+                if (floorWardenSnapshot.empty && userRecord.email) {
+                    floorWardenSnapshot = await db.collection("floor_wardens").where("email", "==", userRecord.email).get();
+                }
+
+                if (floorWardenSnapshot.empty) {
                     return NextResponse.json(
                         { error: "Floor warden data not found" },
                         { status: 404 }
                     );
                 }
 
+                const floorWardenDoc = floorWardenSnapshot.docs[0];
                 const floorWardenData = floorWardenDoc.data();
                 const assignedFloors = floorWardenData?.assignedFloors || [];
 
@@ -392,15 +450,20 @@ export async function GET(request: NextRequest) {
 
             case "floor_attendant": {
                 // Get floor attendant's assigned floor
-                const attendantDoc = await db.collection("staff").doc(uid).get();
+                let attendantSnapshot = await db.collection("floor_attendants").where("uid", "==", uid).get();
 
-                if (!attendantDoc.exists) {
+                if (attendantSnapshot.empty && userRecord.email) {
+                    attendantSnapshot = await db.collection("floor_attendants").where("email", "==", userRecord.email).get();
+                }
+
+                if (attendantSnapshot.empty) {
                     return NextResponse.json(
                         { error: "Floor attendant data not found" },
                         { status: 404 }
                     );
                 }
 
+                const attendantDoc = attendantSnapshot.docs[0];
                 const attendantData = attendantDoc.data();
                 const floorId = attendantData?.assignedFloors?.[0];
 
@@ -461,6 +524,94 @@ export async function GET(request: NextRequest) {
                     maintenance: floorMaintenance,
                     issues: floorIssues
                 };
+                break;
+            }
+
+            case "supervisor": {
+                // Get supervisor data
+                let supervisorSnapshot = await db.collection("supervisors").where("uid", "==", uid).get();
+
+                if (supervisorSnapshot.empty && userRecord.email) {
+                    supervisorSnapshot = await db.collection("supervisors").where("email", "==", userRecord.email).get();
+                }
+
+                if (supervisorSnapshot.empty) {
+                    return NextResponse.json(
+                        { error: "Supervisor data not found" },
+                        { status: 404 }
+                    );
+                }
+
+                const supervisorDoc = supervisorSnapshot.docs[0];
+                const supervisorData = supervisorDoc.data();
+                const hostelId = supervisorData?.assignedHostel;
+
+                // Fetch hostel data
+                let hostelData = null;
+                if (hostelId) {
+                    const hostelDoc = await db.collection("hostels").doc(hostelId).get();
+                    if (hostelDoc.exists) {
+                        hostelData = { id: hostelDoc.id, ...hostelDoc.data() };
+                    }
+                }
+
+                // Fetch floors in the hostel
+                let floors: Floor[] = [];
+                if (hostelId) {
+                    const floorsSnapshot = await db.collection("floors").where("hostelId", "==", hostelId).get();
+                    floors = floorsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                }
+
+                // Fetch students in the hostel
+                let students: Student[] = [];
+                if (hostelId) {
+                    const studentsSnapshot = await db.collection("students")
+                        .where("hostelDetails.hostel", "==", hostelId)
+                        .get();
+                    
+                    if (studentsSnapshot.empty) {
+                        // Try alternative field name
+                        const altStudentsSnapshot = await db.collection("students")
+                            .where("hostel", "==", hostelId)
+                            .get();
+                        
+                        students = altStudentsSnapshot.docs.map(doc => {
+                            const data = doc.data();
+                            return {
+                                id: doc.id,
+                                name: data.fullName || data.name || "Unknown",
+                                email: data.email || "",
+                                course: data.course || "",
+                                department: data.department || "",
+                                room: data.hostelDetails?.roomNumber || data.room || "",
+                                hostel: data.hostelDetails?.hostel || data.hostel || "",
+                                profilePictureUrl: data.profilePictureUrl || ""
+                            };
+                        });
+                    } else {
+                        students = studentsSnapshot.docs.map(doc => {
+                            const data = doc.data();
+                            return {
+                                id: doc.id,
+                                name: data.fullName || data.name || "Unknown",
+                                email: data.email || "",
+                                course: data.course || "",
+                                department: data.department || "",
+                                room: data.hostelDetails?.roomNumber || data.room || "",
+                                hostel: data.hostelDetails?.hostel || data.hostel || "",
+                                profilePictureUrl: data.profilePictureUrl || ""
+                            };
+                        });
+                    }
+                }
+
+                responseData = {
+                    supervisor: supervisorData,
+                    hostel: hostelData,
+                    floors,
+                    students,
+                };
+                
                 break;
             }
 
