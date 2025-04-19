@@ -39,13 +39,18 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Invalid request body format" }, { status: 400 });
         }
 
-        const { content, type } = body || {};
+        const { content, type, hostelDetails, category } = body || {};
         if (!content || !type) {
             return NextResponse.json({ error: "Missing required fields: content and type are required" }, { status: 400 });
         }
 
         if (!["complaint", "maintenance"].includes(type)) {
             return NextResponse.json({ error: "Invalid type value. Must be 'complaint' or 'maintenance'" }, { status: 400 });
+        }
+
+        // For maintenance issues, category is required
+        if (type === "maintenance" && !category) {
+            return NextResponse.json({ error: "Category is required for maintenance issues" }, { status: 400 });
         }
 
         let studentSnapshot = await db.collection("students").where("uid", "==", uid).get();
@@ -58,10 +63,11 @@ export async function POST(request: NextRequest) {
         let studentId = uid;
 
         if (studentSnapshot.empty) {
+            // If student not found, create a new student record
             studentData = {
                 uid,
                 email: userRecord.email,
-                name: userRecord.displayName || "Student",
+                fullName: userRecord.displayName || "Student",
                 id: userRecord.uid.substring(0, 8).toUpperCase(),
                 course: "Not set",
                 department: "Not set",
@@ -70,6 +76,15 @@ export async function POST(request: NextRequest) {
                 issues: [],
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
             };
+            
+            // Include hostel details if provided
+            if (hostelDetails) {
+                studentData.hostelDetails = hostelDetails;
+                studentData.hostel = hostelDetails.hostel || null;
+                studentData.floor = hostelDetails.floor || null;
+                studentData.room = hostelDetails.roomNumber || null;
+            }
+            
             await db.collection("students").doc(studentId).set(studentData);
         } else {
             studentDoc = studentSnapshot.docs[0];
@@ -82,20 +97,42 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        const issueId = Date.now();
+        // Extract hostel information
+        const issueHostelDetails = hostelDetails || studentData.hostelDetails || {
+            hostel: studentData.hostel,
+            floor: studentData.floor,
+            roomNumber: studentData.room
+        };
+
+        const issueId = Date.now().toString();
         const issueData = {
             id: issueId,
             message: content,
             type,
             timestamp: new Date().toISOString(),
-            author: studentData.name || userRecord.displayName,
+            author: studentData.fullName || studentData.name || userRecord.displayName,
             authorId: uid,
             likes: 0,
             isSolved: false,
             solved: false,
             status: "open",
-            completeDate: null
+            completeDate: null,
+            // Include all hostel details and category
+            hostel: issueHostelDetails.hostel || null,
+            floor: issueHostelDetails.floor || null,
+            room: issueHostelDetails.roomNumber || null,
+            hostelDetails: issueHostelDetails,
+            studentRoom: issueHostelDetails.roomNumber || studentData.room || null,
+            studentName: studentData.fullName || studentData.name || userRecord.displayName || "Unknown Student",
+            studentId: studentId,
         };
+
+        // Add category for maintenance issues
+        if (type === "maintenance" && category) {
+            issueData.category = category;
+        }
+
+        console.log("Creating new issue:", issueData);
 
         await db.collection("students").doc(studentId).update({
             issues: admin.firestore.FieldValue.arrayUnion(issueData),
