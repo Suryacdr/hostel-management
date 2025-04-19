@@ -125,6 +125,7 @@ export default function ChiefWarden() {
       const token = await user.getIdToken(true);
       console.log("Fetching dashboard data with token...");
 
+      // Fetch basic dashboard data
       const response = await fetch("/api/fetch", {
         method: "GET",
         headers: {
@@ -140,8 +141,31 @@ export default function ChiefWarden() {
       }
 
       const dashboardData = await response.json();
-      console.log("Dashboard data received:", dashboardData);
-      setData(dashboardData);
+
+      // Fetch all issues using the new dedicated endpoint
+      const issuesResponse = await fetch("/api/issue/all-issues", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!issuesResponse.ok) {
+        console.error("Error fetching issues:", await issuesResponse.text());
+        throw new Error("Failed to fetch issues data");
+      }
+
+      const issuesData = await issuesResponse.json();
+
+      // Combine the data
+      const combinedData = {
+        ...dashboardData,
+        issues: issuesData.maintenanceIssues || [],
+      };
+
+      console.log("Dashboard data received:", combinedData);
+      setData(combinedData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
       console.error("Error fetching dashboard data:", err);
