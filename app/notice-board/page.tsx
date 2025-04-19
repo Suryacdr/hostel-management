@@ -116,7 +116,16 @@ export default function NoticeBoard() {
       }
 
       const token = await user.getIdToken(true);
-      const response = await fetch('/api/fetch', {
+      
+      // Use the new dedicated API endpoint with optional status filter
+      let url = '/api/issue/all-issues';
+      if (filterStatus !== 'all') {
+        url += `?status=${filterStatus}&type=maintenance`;
+      } else {
+        url += '?type=maintenance'; // Only fetch maintenance issues
+      }
+      
+      const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -154,24 +163,21 @@ export default function NoticeBoard() {
         throw new Error("Invalid data format received from server");
       }
       
-      const allIssues = data.issues || data.maintenance || [];
-      
+      // Use the maintenanceIssues property from the new API response
+      const allIssues = data.maintenanceIssues || [];
+
       const formattedIssues = allIssues.map((issue: any) => ({
-        id: issue.id || `issue-${Date.now()}`,
-        studentId: issue.studentId || "",
-        studentName: issue.studentName || "Unknown Student",
-        message: issue.message || "",
+        id: issue.id || issue.timestamp || `issue-${Date.now()}`,
+        studentId: issue.studentId,
+        studentName: issue.studentName,
+        message: issue.message,
         timestamp: new Date(issue.timestamp || Date.now()),
-        type: issue.type || "maintenance",
-        solved: issue.solved || false,
+        type: issue.type,
+        solved: issue.solved ?? issue.isSolved ?? false,
         hostel: issue.hostel || "",
-        room: issue.room || "",
+        room: issue.studentRoom || "",
         floor: issue.floor || ""
       }));
-
-      formattedIssues.sort((a: MaintenanceIssue, b: MaintenanceIssue) => 
-        b.timestamp.getTime() - a.timestamp.getTime()
-      );
 
       setIssues(formattedIssues);
       setFilteredIssues(formattedIssues);
@@ -183,7 +189,7 @@ export default function NoticeBoard() {
     }
   };
 
-  // Apply filters when search or filter status changes
+  // Apply filters when search term changes
   useEffect(() => {
     if (issues.length > 0) {
       let filtered = [...issues];
@@ -198,16 +204,11 @@ export default function NoticeBoard() {
         );
       }
       
-      if (filterStatus !== 'all') {
-        filtered = filtered.filter(issue => 
-          filterStatus === 'solved' ? issue.solved : !issue.solved
-        );
-      }
-      
       setFilteredIssues(filtered);
     }
-  }, [searchTerm, filterStatus, issues]);
+  }, [searchTerm, issues]);
 
+  // Fetch issues when filter status changes or on component mount
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
       if (user) {
@@ -219,7 +220,7 @@ export default function NoticeBoard() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [filterStatus]);
 
   if (error) {
     return (
