@@ -20,6 +20,7 @@ import {
   ArrowUp,
   DoorOpen,
   Settings,
+  Camera,
 } from "lucide-react";
 import React from "react";
 import { auth } from "@/lib/firebase";
@@ -50,7 +51,7 @@ interface StudentData {
   floor: string;
   profilePictureUrl: string;
   registrationNumber: string;
-  hostel?: string; 
+  hostel?: string;
   hostelDetails?: { hostel: string; floor: string; roomNumber: string };
 }
 
@@ -84,14 +85,11 @@ const PostForm = React.memo(
       // Use hostelDetails object or extract from room
       const hostel =
         studentData.hostelDetails?.hostel ||
-        (studentData.room?.split("-")[0] || "");
-      const floor =
-        studentData.hostelDetails?.floor ||
+        studentData.room?.split("-")[0] ||
         "";
+      const floor = studentData.hostelDetails?.floor || "";
       const roomNumber =
-        studentData.hostelDetails?.roomNumber ||
-        studentData.room ||
-        "";
+        studentData.hostelDetails?.roomNumber || studentData.room || "";
 
       return {
         hostel,
@@ -406,6 +404,9 @@ export default function StudentDashboard() {
   const [imageFile, setImageFile] = React.useState<File | null>(null);
   const [previewImage, setPreviewImage] = React.useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [activeTab, setActiveTab] = React.useState<
+    "feed" | "room" | "roommate"
+  >("feed");
 
   const handleSignOut = () => {
     signOut(auth)
@@ -515,7 +516,8 @@ export default function StudentDashboard() {
           issue.hostel ||
           data.student?.hostel ||
           data.student?.hostelDetails?.hostel ||
-          (data.student?.room?.split("-")[0] || "");
+          data.student?.room?.split("-")[0] ||
+          "";
         const floor =
           issue.floor ||
           data.student?.floor ||
@@ -961,18 +963,83 @@ export default function StudentDashboard() {
         {/* Main Content - Better padding for small screens */}
         <div className="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-4 lg:px-6 pb-8">
           <div className="w-full">
-            <div className="space-y-4 md:space-y-6">
-              <PostForm
-                onSubmitPost={handleSubmitPost}
-                isLoading={isPostLoading}
-                studentData={studentData}
-              />
+            {/* Tab Navigation */}
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md mb-6 overflow-hidden">
+              <div className="flex">
+                <button
+                  onClick={() => setActiveTab("feed")}
+                  className={`flex-1 py-3 px-4 text-center font-medium text-sm transition-colors relative ${
+                    activeTab === "feed"
+                      ? "text-indigo-600 dark:text-indigo-400"
+                      : "text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                  }`}
+                >
+                  Feed
+                  {activeTab === "feed" && (
+                    <motion.div
+                      className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500"
+                      layoutId="tabIndicator"
+                    />
+                  )}
+                </button>
+                <button
+                  onClick={() => setActiveTab("room")}
+                  className={`flex-1 py-3 px-4 text-center font-medium text-sm transition-colors flex items-center justify-center gap-1 relative ${
+                    activeTab === "room"
+                      ? "text-indigo-600 dark:text-indigo-400"
+                      : "text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                  }`}
+                >
+                  <Camera size={16} />
+                  Room Photo
+                  {activeTab === "room" && (
+                    <motion.div
+                      className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500"
+                      layoutId="tabIndicator"
+                    />
+                  )}
+                </button>
+                <button
+                  onClick={() => setActiveTab("roommate")}
+                  className={`flex-1 py-3 px-4 text-center font-medium text-sm transition-colors flex items-center justify-center gap-1 relative ${
+                    activeTab === "roommate"
+                      ? "text-indigo-600 dark:text-indigo-400"
+                      : "text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                  }`}
+                >
+                  <User size={16} />
+                  Roommate
+                  {activeTab === "roommate" && (
+                    <motion.div
+                      className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500"
+                      layoutId="tabIndicator"
+                    />
+                  )}
+                </button>
+              </div>
+            </div>
 
-              <PostsList
-                posts={posts}
-                studentData={studentData}
-                isLoading={isLoading}
-              />
+            {/* Tab Content */}
+            <div className="space-y-4 md:space-y-6">
+              {activeTab === "feed" ? (
+                <>
+                  <PostForm
+                    onSubmitPost={handleSubmitPost}
+                    isLoading={isPostLoading}
+                    studentData={studentData}
+                  />
+
+                  <PostsList
+                    posts={posts}
+                    studentData={studentData}
+                    isLoading={isLoading}
+                  />
+                </>
+              ) : activeTab === "room" ? (
+                <RoomPhotoTab studentData={studentData} />
+              ) : (
+                <RoommateTab />
+              )}
             </div>
           </div>
         </div>
@@ -1186,13 +1253,15 @@ const MessageBox: React.FC<
   const [isLiked, setIsLiked] = React.useState<boolean>(false);
   const [isUpdating, setIsUpdating] = React.useState<boolean>(false);
   const [updateError, setUpdateError] = React.useState<string | null>(null);
-  const [completionDate, setCompletionDate] = React.useState<string | null>(post.completeDate || null);
+  const [completionDate, setCompletionDate] = React.useState<string | null>(
+    post.completeDate || null
+  );
 
   const toggleSolvedStatus = async () => {
     try {
       setIsUpdating(true);
       setUpdateError(null);
-      
+
       const user = auth.currentUser;
       if (!user) {
         throw new Error("User not logged in");
@@ -1201,7 +1270,7 @@ const MessageBox: React.FC<
       const token = await user.getIdToken();
       const newStatus = !isSolved;
       const newCompletionDate = newStatus ? new Date().toISOString() : null;
-      
+
       const response = await fetch("/api/issue/update-issue", {
         method: "PATCH",
         headers: {
@@ -1215,7 +1284,7 @@ const MessageBox: React.FC<
       });
 
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.error || "Failed to update issue status");
       }
@@ -1224,10 +1293,11 @@ const MessageBox: React.FC<
       setIsSolved(newStatus);
       setCompletionDate(newCompletionDate);
       console.log(`Issue marked as ${newStatus ? "solved" : "unsolved"}`);
-      
     } catch (error) {
       console.error("Error updating issue status:", error);
-      setUpdateError(error instanceof Error ? error.message : "Failed to update status");
+      setUpdateError(
+        error instanceof Error ? error.message : "Failed to update status"
+      );
       setIsSolved(post.solved); // Revert to original state
       setCompletionDate(post.completeDate || null); // Convert undefined to null
     } finally {
@@ -1294,15 +1364,26 @@ const MessageBox: React.FC<
         <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex flex-wrap gap-2">
           <span className="inline-flex items-center gap-1">
             <Building2 size={12} />
-            {(post.hostelDetails?.hostel || studentData?.hostelDetails?.hostel || studentData?.room?.split('-')?.[0] || '')}
+            {post.hostelDetails?.hostel ||
+              studentData?.hostelDetails?.hostel ||
+              studentData?.room?.split("-")?.[0] ||
+              ""}
           </span>
           <span className="inline-flex items-center gap-1">
             <ArrowUp size={12} />
-            Floor: {(post.hostelDetails?.floor || studentData?.hostelDetails?.floor || studentData?.floor || '')}
+            Floor:{" "}
+            {post.hostelDetails?.floor ||
+              studentData?.hostelDetails?.floor ||
+              studentData?.floor ||
+              ""}
           </span>
           <span className="inline-flex items-center gap-1">
             <DoorOpen size={12} />
-            Room: {(post.hostelDetails?.roomNumber || studentData?.hostelDetails?.roomNumber || studentData?.room || '')}
+            Room:{" "}
+            {post.hostelDetails?.roomNumber ||
+              studentData?.hostelDetails?.roomNumber ||
+              studentData?.room ||
+              ""}
           </span>
           {post.type === "Maintenance" && post.category && (
             <span className="inline-flex items-center gap-1">
@@ -1365,7 +1446,7 @@ const MessageBox: React.FC<
                 Completed: {new Date(completionDate).toLocaleDateString()}
               </div>
             )}
-            
+
             <div className="flex items-center gap-2">
               {updateError && (
                 <span className="text-xs text-red-500 dark:text-red-400">
@@ -1376,11 +1457,11 @@ const MessageBox: React.FC<
                 onClick={toggleSolvedStatus}
                 disabled={isUpdating}
                 className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${
-                  isUpdating 
-                    ? "bg-gray-100 dark:bg-gray-700 opacity-60 cursor-wait" 
+                  isUpdating
+                    ? "bg-gray-100 dark:bg-gray-700 opacity-60 cursor-wait"
                     : isSolved
-                      ? "bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-300"
-                      : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-green-50 dark:hover:bg-green-900/30 hover:text-green-600 dark:hover:text-green-300"
+                    ? "bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-300"
+                    : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-green-50 dark:hover:bg-green-900/30 hover:text-green-600 dark:hover:text-green-300"
                 }`}
               >
                 {isUpdating ? (
@@ -1411,7 +1492,9 @@ const MessageBox: React.FC<
                   <>
                     <CheckCircle
                       size={14}
-                      className={isSolved ? "fill-green-600 dark:fill-green-300" : ""}
+                      className={
+                        isSolved ? "fill-green-600 dark:fill-green-300" : ""
+                      }
                     />
                     {isSolved ? "Solved" : "Mark as Solved"}
                   </>
@@ -1424,3 +1507,187 @@ const MessageBox: React.FC<
     </div>
   );
 };
+
+// Room Photo Tab Component
+const RoomPhotoTab = React.memo(
+  ({ studentData }: { studentData: StudentData | null }) => {
+    const hostelNumber =
+      studentData?.hostelDetails?.hostel ||
+      studentData?.room?.split("-")[0] ||
+      "A";
+    const roomNumber =
+      studentData?.hostelDetails?.roomNumber || studentData?.room || "A-101";
+
+    return (
+      <motion.div
+        className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-5"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2 }}
+      >
+        <div className="flex flex-col space-y-4">
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+            <Camera size={20} className="text-indigo-500" />
+            Room Photo: {roomNumber}
+          </h2>
+
+          <div className="relative w-full h-[300px] sm:h-[400px] md:h-[500px] overflow-hidden rounded-lg">
+            <Image
+              src="/room-placeholder.jpeg"
+              alt={`Room ${roomNumber} photo`}
+              fill
+              className="object-cover"
+            />
+            <div className="absolute bottom-4 right-4 bg-black/70 px-3 py-1.5 rounded-lg text-white text-sm">
+              Hostel {hostelNumber}, Room {roomNumber}
+            </div>
+          </div>
+
+          <div className="bg-gray-50 dark:bg-slate-700/30 rounded-lg p-4 text-sm text-gray-600 dark:text-gray-300">
+            <p className="mb-2">
+              This is a placeholder room photo. In the actual implementation,
+              this could:
+            </p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>
+                Display the most recent image of your room from inspections
+              </li>
+              <li>
+                Allow you to upload your own photos for maintenance requests
+              </li>
+              <li>Show historical room condition for documentation</li>
+            </ul>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+);
+RoomPhotoTab.displayName = "RoomPhotoTab";
+
+// Roommate Tab Component
+const RoommateTab = React.memo(() => {
+  // Dummy roommate data - in a real app, this would come from an API
+  const roommate = {
+    name: "Ramesh Chaiwala",
+    profilePictureUrl: "/boy.png", // Assuming you have a placeholder image
+    course: "Computer Applications",
+    department: "BCA",
+    phone: "+91 9867564378",
+    email: "ramesh.chaiwala@university.edu",
+    year: "3rd Year",
+  };
+
+  return (
+    <motion.div
+      className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-5"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+    >
+      <div className="flex flex-col space-y-6">
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+          <User size={20} className="text-indigo-500" />
+          Your Roommate
+        </h2>
+
+        <div className="flex flex-col sm:flex-row gap-5">
+          {/* Profile Image */}
+          <div className="flex-shrink-0 flex flex-col items-center">
+            <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-full overflow-hidden ring-4 ring-white dark:ring-slate-700 bg-white dark:bg-slate-700 shadow-md">
+              <Image
+                src={roommate.profilePictureUrl}
+                width={150}
+                height={150}
+                alt="Roommate Profile"
+                className="object-cover w-full h-full"
+              />
+            </div>
+          </div>
+
+          {/* Details */}
+          <div className="flex-1 flex flex-col justify-center">
+            <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-2">
+              {roommate.name}
+            </h3>
+
+            <div className="space-y-3">
+              <div className="flex items-start gap-3 text-sm">
+                <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                  <School
+                    size={16}
+                    className="text-indigo-600 dark:text-indigo-400"
+                  />
+                </div>
+                <div>
+                  <p className="font-medium text-gray-800 dark:text-gray-200">
+                    {roommate.course}
+                  </p>
+                  <p className="text-gray-500 dark:text-gray-400">
+                    {roommate.department}, {roommate.year}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 text-sm">
+                <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-green-600 dark:text-green-400"
+                  >
+                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-medium text-gray-800 dark:text-gray-200">
+                    Phone
+                  </p>
+                  <p className="text-gray-500 dark:text-gray-400">
+                    {roommate.phone}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 text-sm">
+                <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-blue-600 dark:text-blue-400"
+                  >
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                    <polyline points="22,6 12,13 2,6"></polyline>
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-medium text-gray-800 dark:text-gray-200">
+                    Email
+                  </p>
+                  <p className="text-gray-500 dark:text-gray-400">
+                    {roommate.email}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+});
+RoommateTab.displayName = "RoommateTab";
