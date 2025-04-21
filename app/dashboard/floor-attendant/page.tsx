@@ -68,13 +68,12 @@ interface DashboardData {
     hostelId: string;
     hostelName?: string;
   };
-  rooms?: Room[];
-  maintenance?: MaintenanceIssue[];
-  issues?: MaintenanceIssue[];
 }
 
 export default function FloorAttender() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [issues, setIssues] = useState<MaintenanceIssue[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -121,6 +120,7 @@ export default function FloorAttender() {
           } : undefined
         } : null);
 
+        // Only refetch profile/dashboard info, not issues/rooms
         fetchDashboardData();
       } catch (error) {
         console.error("Error updating profile picture:", error);
@@ -139,7 +139,7 @@ export default function FloorAttender() {
 
       const token = await user.getIdToken(true);
 
-      // Fetch basic dashboard data
+      // Fetch basic dashboard data (profile, floor, etc.)
       const response = await fetch("/api/fetch", {
         method: "GET",
         headers: {
@@ -153,15 +153,36 @@ export default function FloorAttender() {
       }
 
       const dashboardData = await response.json();
+      setData(dashboardData);
 
-      // Fetch issues with appropriate filtering
+      // Fetch rooms only once, not on every filter/tab change
+      setRooms(dashboardData.rooms || []);
+    } catch (err) {
+      console.error("Error fetching data:", err);
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch issues when filterStatus changes
+  const fetchIssues = async () => {
+    try {
+      setLoading(true);
+      const user = auth.currentUser;
+      if (!user) {
+        setError("User not authenticated");
+        return;
+      }
+
+      const token = await user.getIdToken(true);
+
       const issuesUrl = new URL("/api/issue/all-issues", window.location.origin);
-      
-      // Add status filter if needed
+
       if (filterStatus !== 'all') {
         issuesUrl.searchParams.append('status', filterStatus);
       }
-      
+
       const issuesResponse = await fetch(issuesUrl.toString(), {
         method: "GET",
         headers: {
@@ -175,17 +196,9 @@ export default function FloorAttender() {
       }
 
       const issuesData = await issuesResponse.json();
-
-      // Combine the data
-      const combinedData: DashboardData = {
-        ...dashboardData,
-        issues: issuesData.maintenanceIssues || [],
-      };
-
-      setData(combinedData);
-      console.log("Dashboard data loaded for floor attendant:", combinedData);
+      setIssues(issuesData.maintenanceIssues || []);
     } catch (err) {
-      console.error("Error fetching data:", err);
+      console.error("Error fetching issues:", err);
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setLoading(false);
@@ -193,20 +206,47 @@ export default function FloorAttender() {
   };
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    fetchDashboardData();
   }, []);
 
   useEffect(() => {
-    fetchDashboardData();
+    fetchIssues();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterStatus]);
+
+  const handleStatusChange = async (issue: MaintenanceIssue, newStatus: boolean) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        setError("User not authenticated");
+        return;
+      }
+
+      const token = await user.getIdToken();
+
+      const response = await fetch("/api/issue/update-issue", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          issueId: issue.id,
+          solved: newStatus,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update issue status");
+      }
+
+      // Only refetch issues, not the whole dashboard
+      fetchIssues();
+    } catch (error) {
+      console.error("Error updating issue status:", error);
+      setError(error instanceof Error ? error.message : "An error occurred");
+    }
+  };
 
   // Format date for display
   const formatDate = (timestamp: Date | string): string => {
@@ -267,40 +307,6 @@ export default function FloorAttender() {
       </button>
     </div>
   );
-
-  const handleStatusChange = async (issue: MaintenanceIssue, newStatus: boolean) => {
-    try {
-      const user = auth.currentUser;
-      if (!user) {
-        setError("User not authenticated");
-        return;
-      }
-
-      const token = await user.getIdToken();
-      
-      const response = await fetch("/api/issue/update-issue", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          issueId: issue.id,
-          solved: newStatus,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to update issue status");
-      }
-
-      // Update local state
-      fetchDashboardData();
-    } catch (error) {
-      console.error("Error updating issue status:", error);
-      setError(error instanceof Error ? error.message : "An error occurred");
-    }
-  };
 
   return (
     <AuthGuard>
@@ -455,13 +461,13 @@ export default function FloorAttender() {
                       <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 rounded-lg shadow-sm">
                         <DoorOpen size={16} className="text-teal-500" />
                         <span className="text-xs md:text-sm font-medium">
-                          {data?.rooms?.length || 0} Rooms
+                          {rooms.length || 0} Rooms
                         </span>
                       </div>
                       <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 rounded-lg shadow-sm">
                         <CircleDotDashed size={16} className="text-yellow-500" />
                         <span className="text-xs md:text-sm font-medium">
-                          {data?.issues?.filter(issue => !issue.solved)?.length || 0} Pending Issues
+                          {issues.filter(issue => !issue.solved)?.length || 0} Pending Issues
                         </span>
                       </div>
                       <Link href="/notice-board" className="flex items-center gap-2 px-3 py-1.5 bg-teal-500 text-white rounded-lg shadow-sm hover:bg-teal-600 transition-colors">
@@ -539,7 +545,7 @@ export default function FloorAttender() {
                 <>
                   <MaintenanceStatusFilter />
                   
-                  {(!data?.issues || data.issues.length === 0) ? (
+                  {(issues.length === 0) ? (
                     <motion.div
                       className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow text-center"
                       initial={{ opacity: 0, y: 20 }}
@@ -578,7 +584,7 @@ export default function FloorAttender() {
                     </motion.div>
                   ) : (
                     <div className="space-y-4">
-                      {data.issues.map((issue, index) => (
+                      {issues.map((issue, index) => (
                         <motion.div
                           key={issue.id}
                           className="bg-white dark:bg-slate-800 p-4 md:p-5 rounded-xl shadow-md"
@@ -687,7 +693,7 @@ export default function FloorAttender() {
 
               {activeTab === 'rooms' && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {(!data?.rooms || data.rooms.length === 0) ? (
+                  {(rooms.length === 0) ? (
                     <motion.div
                       className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow text-center col-span-full"
                       initial={{ opacity: 0, y: 20 }}
@@ -719,7 +725,7 @@ export default function FloorAttender() {
                       </div>
                     </motion.div>
                   ) : (
-                    data.rooms.map((room, index) => (
+                    rooms.map((room, index) => (
                       <motion.div
                         key={room.id}
                         className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-md"
