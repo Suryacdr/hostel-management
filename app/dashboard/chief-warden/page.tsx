@@ -66,6 +66,7 @@ export default function ChiefWarden() {
   const [profileData, setProfileData] = useState<ChiefWardenProfile | null>(
     null
   );
+  const [activeTab, setActiveTab] = useState<"staffs" | "issues">("staffs");
   const menuRef = useRef<HTMLDivElement>(null);
 
   const handleSignOut = () => {
@@ -235,56 +236,59 @@ export default function ChiefWarden() {
           {staffMembers.map((staff, index) => (
             <motion.div
               key={index}
-              className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow hover:shadow-md transition-shadow"
+              className="bg-white dark:bg-slate-800 rounded-xl overflow-hidden shadow hover:shadow-md transition-all duration-300 hover:-translate-y-1 border border-gray-100 dark:border-slate-700"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: 0.05 * (index % 6) }}
             >
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
-                  <User className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
-                    {staff.fullName}
-                  </h3>
-                  <span className="text-sm text-indigo-600 dark:text-indigo-400 mt-0.5 block">
-                    {staff.role
-                      ? staff.role
-                          .split("_")
-                          .map(
-                            (word) =>
-                              word.charAt(0).toUpperCase() + word.slice(1)
-                          )
-                          .join(" ")
-                      : "Staff Member"}
-                  </span>
+              <div className="bg-gradient-to-r from-purple-500 to-indigo-600 dark:from-purple-900 dark:to-indigo-900 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-14 h-14 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
+                    <User className="w-7 h-7 text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">
+                      {staff.fullName}
+                    </h3>
+                    <span className="text-sm text-purple-100 mt-0.5 block">
+                      {staff.role
+                        ? staff.role
+                            .split("_")
+                            .map(
+                              (word) =>
+                                word.charAt(0).toUpperCase() + word.slice(1)
+                            )
+                            .join(" ")
+                        : "Staff Member"}
+                    </span>
+                  </div>
                 </div>
               </div>
-              <div className="mt-4 space-y-2 text-sm">
-                <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-                  <Mail className="w-4 h-4 text-gray-400" />
-                  {staff.email}
+              <div className="p-4 space-y-3">
+                <p className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                  <Mail className="w-4 h-4 text-indigo-500" />
+                  <span className="text-sm">{staff.email}</span>
                 </p>
-                <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-                  <Phone className="w-4 h-4 text-gray-400" />
-                  {staff.phoneNumber}
+                <p className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                  <Phone className="w-4 h-4 text-indigo-500" />
+                  <span className="text-sm">{staff.phoneNumber}</span>
                 </p>
                 {staff.assignedHostel && (
-                  <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-                    <Building2 className="w-4 h-4 text-gray-400" />
-                    Hostel: {staff.assignedHostel}
+                  <p className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                    <Building2 className="w-4 h-4 text-indigo-500" />
+                    <span className="text-sm">Hostel: {staff.assignedHostel}</span>
                   </p>
                 )}
                 {staff.assignedFloors && staff.assignedFloors.length > 0 && (
-                  <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-                    <Users className="w-4 h-4 text-gray-400" />
-                    Floors: {staff.assignedFloors.join(", ")}
+                  <p className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                    <Users className="w-4 h-4 text-indigo-500" />
+                    <span className="text-sm">Floors: {staff.assignedFloors.join(", ")}</span>
                   </p>
                 )}
                 {staff.reportsTo && (
-                  <div className="mt-3 pt-2 border-t border-gray-100 dark:border-gray-700">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                  <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                    <p className="text-sm flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
+                      <ArrowUp className="w-3.5 h-3.5" />
                       Reports to: {staff.reportsTo}
                     </p>
                   </div>
@@ -462,140 +466,149 @@ export default function ChiefWarden() {
         </div>
 
         <div className="flex-1 max-w-7xl w-full mx-auto px-4 pb-8">
-          {renderStaffCards(data?.supervisors, "Supervisors")}
-          {renderStaffCards(data?.hostel_wardens, "Hostel Wardens")}
-          {renderStaffCards(data?.floor_wardens, "Floor Wardens")}
-          {renderStaffCards(data?.floor_attendants, "Floor Attendants")}
-
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold mb-4">Hostels Overview</h2>
-            {data?.hostels && data.hostels.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {data.hostels.map((hostel, index) => (
-                  <motion.div
-                    key={hostel.id}
-                    className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow hover:shadow-md transition-shadow"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: 0.05 * (index % 6) }}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center flex-shrink-0">
-                        <Building2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                      </div>
-                      <div>
-                        <h3 className="text-xl font-semibold text-gray-800 dark:text-white">
-                          {hostel.name}
-                        </h3>
-                      </div>
-                    </div>
-                    <div className="mt-4 space-y-2.5">
-                      <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-                        <Building2 className="w-4 h-4 text-gray-400" />
-                        Total Floors: {hostel.totalFloors}
-                      </p>
-                      <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-                        <Users className="w-4 h-4 text-gray-400" />
-                        Total Rooms: {hostel.totalRooms}
-                      </p>
-                      <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-                        <User className="w-4 h-4 text-gray-400" />
-                        Warden: {hostel.warden}
-                      </p>
-                      <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-                        <User className="w-4 h-4 text-gray-400" />
-                        Supervisor: {hostel.supervisor}
-                      </p>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            ) : (
-              <motion.div
-                className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow text-center"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-              >
-                <p className="text-gray-500 dark:text-gray-400">
-                  No hostels found.
-                </p>
-              </motion.div>
-            )}
+          <div className="flex border-b border-gray-200 dark:border-slate-700 mb-6">
+            <button
+              className={`py-4 px-6 font-medium text-sm focus:outline-none relative ${
+                activeTab === "staffs"
+                  ? "text-purple-600 dark:text-purple-400"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+              onClick={() => setActiveTab("staffs")}
+            >
+              <span className="flex items-center gap-2">
+                <Users size={18} />
+                Staff Members
+              </span>
+              {activeTab === "staffs" && (
+                <motion.div
+                  layoutId="tab-indicator"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-600 dark:bg-purple-400"
+                  initial={false}
+                />
+              )}
+            </button>
+            <button
+              className={`py-4 px-6 font-medium text-sm focus:outline-none relative ${
+                activeTab === "issues"
+                  ? "text-purple-600 dark:text-purple-400"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+              onClick={() => setActiveTab("issues")}
+            >
+              <span className="flex items-center gap-2">
+                <CircleDotDashed size={18} />
+                Issues & Complaints
+              </span>
+              {activeTab === "issues" && (
+                <motion.div
+                  layoutId="tab-indicator"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-600 dark:bg-purple-400"
+                  initial={false}
+                />
+              )}
+            </button>
           </div>
 
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold mb-4">Recent Issues</h2>
-            {data?.issues && data.issues.length > 0 ? (
-              <div className="space-y-4">
-                {data.issues.slice(0, 10).map((issue: any, index) => (
+          {activeTab === "staffs" && (
+            <>
+              {renderStaffCards(data?.supervisors, "Supervisors")}
+              {renderStaffCards(data?.hostel_wardens, "Hostel Wardens")}
+              {renderStaffCards(data?.floor_wardens, "Floor Wardens")}
+              {renderStaffCards(data?.floor_attendants, "Floor Attendants")}
+
+              <div className="mb-8">
+                <h2 className="text-2xl font-bold mb-4">Hostels Overview</h2>
+                {data?.hostels && data.hostels.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {data.hostels.map((hostel, index) => (
+                      <motion.div
+                        key={hostel.id}
+                        className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow hover:shadow-md transition-shadow"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: 0.05 * (index % 6) }}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center flex-shrink-0">
+                            <Building2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                          </div>
+                          <div>
+                            <h3 className="text-xl font-semibold text-gray-800 dark:text-white">
+                              {hostel.name}
+                            </h3>
+                          </div>
+                        </div>
+                        <div className="mt-4 space-y-2.5">
+                          <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                            <Building2 className="w-4 h-4 text-gray-400" />
+                            Total Floors: {hostel.totalFloors}
+                          </p>
+                          <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                            <Users className="w-4 h-4 text-gray-400" />
+                            Total Rooms: {hostel.totalRooms}
+                          </p>
+                          <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                            <User className="w-4 h-4 text-gray-400" />
+                            Warden: {hostel.warden}
+                          </p>
+                          <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                            <User className="w-4 h-4 text-gray-400" />
+                            Supervisor: {hostel.supervisor}
+                          </p>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                ) : (
                   <motion.div
-                    key={issue.id || index}
-                    className="bg-white dark:bg-slate-800 p-4 md:p-5 rounded-xl shadow-md hover:shadow-lg transition-shadow"
+                    className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow text-center"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: 0.05 * (index % 5) }}
+                    transition={{ duration: 0.3 }}
                   >
-                    <div className="flex items-start gap-3">
-                      <div
-                        className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 
-                      ${
+                    <p className="text-gray-500 dark:text-gray-400">
+                      No hostels found.
+                    </p>
+                  </motion.div>
+                )}
+              </div>
+            </>
+          )}
+
+          {activeTab === "issues" && (
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold mb-4">Issues & Complaints</h2>
+              {data?.issues && data.issues.length > 0 ? (
+                <div className="space-y-4">
+                  {data.issues.map((issue: any, index) => (
+                    <motion.div
+                      key={issue.id || index}
+                      className="bg-white dark:bg-slate-800 rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-gray-100 dark:border-slate-700"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: 0.05 * (index % 5) }}
+                    >
+                      <div className={`px-5 py-3 border-l-4 ${
                         issue.type === "maintenance"
-                          ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
-                          : "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
-                      }`}
-                      >
-                        {issue.type === "maintenance" ? (
-                          <svg
-                            className="w-5 h-5"
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                            />
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                            />
-                          </svg>
-                        ) : (
-                          <svg
-                            className="w-5 h-5"
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                            />
-                          </svg>
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h3 className="font-medium text-gray-800 dark:text-white text-sm md:text-base">
-                              {issue.studentName || "Student"}
-                            </h3>
+                          ? "bg-blue-50 dark:bg-blue-900/20 border-blue-500"
+                          : "bg-red-50 dark:bg-red-900/20 border-red-500"
+                      }`}>
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                              issue.type === "maintenance"
+                                ? "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300"
+                                : "bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300"
+                            }`}>
+                              {issue.type === "maintenance" ? "Maintenance" : "Complaint"}
+                            </span>
                             <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
                               <Clock size={12} className="mr-1" />
                               {new Date(issue.timestamp).toLocaleDateString()}
                             </div>
                           </div>
                           <span
-                            className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                               issue.solved
                                 ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
                                 : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300"
@@ -604,92 +617,132 @@ export default function ChiefWarden() {
                             {issue.solved ? "Resolved" : "Pending"}
                           </span>
                         </div>
-                        <div className="mt-2">
-                          <p className="text-gray-700 dark:text-gray-300 text-sm md:text-base">
-                            {issue.message}
-                          </p>
-
-                          {issue.hostelDetails && (
-                            <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex flex-wrap gap-2">
-                              <span className="inline-flex items-center gap-1">
-                                <Building2 size={12} />
-                                {issue.hostelDetails.hostel}
-                              </span>
-                              <span className="inline-flex items-center gap-1">
-                                <ArrowUp size={12} />
-                                Floor: {issue.hostelDetails.floor}
-                              </span>
-                              <span className="inline-flex items-center gap-1">
-                                <DoorOpen size={12} />
-                                Room: {issue.hostelDetails.roomNumber}
-                              </span>
-                              {issue.type === "maintenance" && issue.category && (
-                                <span className="inline-flex items-center gap-1">
-                                  <Settings size={12} />
-                                  Category: {issue.category}
-                                </span>
-                              )}
-                            </div>
-                          )}
-
-                          <div className="mt-3 pt-3 flex justify-between items-center border-t border-gray-100 dark:border-slate-700">
-                            <span
-                              className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${
+                      </div>
+                      
+                      <div className="p-5">
+                        <div className="flex items-start gap-4">
+                          <div
+                            className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 
+                              ${
                                 issue.type === "maintenance"
-                                  ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300"
-                                  : "bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300"
+                                  ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
+                                  : "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
                               }`}
-                            >
-                              {issue.type === "maintenance"
-                                ? "Maintenance"
-                                : "Complaint"}
-                            </span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
-                              ID:{" "}
-                              {issue.id
-                                ? String(issue.id).substring(0, 8) + "..."
-                                : "N/A"}
-                            </span>
+                          >
+                            {issue.type === "maintenance" ? (
+                              <svg
+                                className="w-5 h-5"
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                                />
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                />
+                              </svg>
+                            ) : (
+                              <svg
+                                className="w-5 h-5"
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                                />
+                              </svg>
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-medium text-gray-800 dark:text-white text-base mb-1">
+                              {issue.studentName || "Student"}
+                            </h3>
+                            <p className="text-gray-700 dark:text-gray-300">
+                              {issue.message}
+                            </p>
+
+                            {issue.hostelDetails && (
+                              <div className="mt-3 flex flex-wrap gap-3 p-2.5 bg-gray-50 dark:bg-slate-700/30 rounded-lg">
+                                <span className="inline-flex items-center gap-1 bg-white dark:bg-slate-700 px-2 py-1 rounded-md text-sm">
+                                  <Building2 size={14} className="text-gray-500" />
+                                  {issue.hostelDetails.hostel}
+                                </span>
+                                <span className="inline-flex items-center gap-1 bg-white dark:bg-slate-700 px-2 py-1 rounded-md text-sm">
+                                  <ArrowUp size={14} className="text-gray-500" />
+                                  Floor {issue.hostelDetails.floor}
+                                </span>
+                                <span className="inline-flex items-center gap-1 bg-white dark:bg-slate-700 px-2 py-1 rounded-md text-sm">
+                                  <DoorOpen size={14} className="text-gray-500" />
+                                  Room {issue.hostelDetails.roomNumber}
+                                </span>
+                                {issue.type === "maintenance" && issue.category && (
+                                  <span className="inline-flex items-center gap-1 bg-white dark:bg-slate-700 px-2 py-1 rounded-md text-sm">
+                                    <Settings size={14} className="text-gray-500" />
+                                    {issue.category}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
+
+                        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700 flex justify-end">
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            ID: {issue.id ? String(issue.id).substring(0, 8) + "..." : "N/A"}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            ) : (
-              <motion.div
-                className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow text-center"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-              >
-                <div className="flex flex-col items-center justify-center">
-                  <div className="w-20 h-20 mb-4 text-gray-300 dark:text-gray-600">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={1.5}
-                        d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
-                      />
-                    </svg>
-                  </div>
-                  <h3 className="text-xl font-medium text-gray-700 dark:text-gray-200 mb-2">
-                    No issues found
-                  </h3>
-                  <p className="text-gray-500 dark:text-gray-400">
-                    There are currently no reported issues or complaints.
-                  </p>
+                    </motion.div>
+                  ))}
                 </div>
-              </motion.div>
-            )}
-          </div>
+              ) : (
+                <motion.div
+                  className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow text-center"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <div className="flex flex-col items-center justify-center">
+                    <div className="w-20 h-20 mb-4 text-gray-300 dark:text-gray-600">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.5}
+                          d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
+                        />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-medium text-gray-700 dark:text-gray-200 mb-2">
+                      No issues found
+                    </h3>
+                    <p className="text-gray-500 dark:text-gray-400">
+                      There are currently no reported issues or complaints.
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+            </div>
+          )}
         </div>
 
         <AnimatePresence>
