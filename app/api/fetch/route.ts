@@ -30,7 +30,7 @@ type Issue = {
     studentId?: string;
     studentName?: string;
     message: string;
-    type: string; // 'complaint' or 'maintenance'
+    type: string;
     timestamp: Date;
     author?: string;
     authorId?: string;
@@ -49,13 +49,23 @@ type Floor = {
 
 type Student = {
     id: string;
-    name: string;
+    fullName: string;
     email: string;
     course?: string;
     department?: string;
-    room?: string;
-    hostel?: string;
-    profilePictureUrl?: string;
+    registrationNumber?: string | number;
+    year?: string;
+    dateOfOccupancy?: string;
+    pictureProfileUrl?: string;
+    profilePictureUrl?: string; // For backward compatibility
+    age?: number;
+    phoneNumber?: number;
+    hostelDetails?: {
+        hostelId: string;
+        room_id: string;
+        roomNumber: string;
+        floor: string;
+    };
 };
 
 // Helper functions
@@ -141,25 +151,32 @@ export async function GET(request: NextRequest) {
                 const email = studentData.email || "";
                 const room =
                     studentData.hostelDetails?.roomNumber ||
-                    studentData.room ||
+                    studentData.room_id ||
                     "";
                 const hostel =
                     studentData.hostelDetails?.hostel ||
-                    studentData.hostel ||
+                    studentData.hostelId ||
                     "";
                 const profilePictureUrl = studentData.profilePictureUrl || "";
 
                 responseData = {
                     student: {
                         id: studentDoc.id,
-                        name,
+                        fullName: name,
                         email,
                         course: studentData.course,
                         registrationNumber: studentData.registrationNumber || studentData.regestrationNumber || "",
                         department: studentData.course?.split(" ").pop() || "",
-                        room,
-                        hostel,
-                        profilePictureUrl
+                        year: studentData.year || "",
+                        dateOfOccupancy: studentData.dateOfOccupancy || "",
+                        hostelDetails: {
+                            hostelId: studentData.hostelDetails?.hostelId || studentData.hostelId || "",
+                            room_id: studentData.hostelDetails?.room_id || studentData.room_id || "",
+                            roomNumber: studentData.hostelDetails?.roomNumber || "",
+                            floor: studentData.hostelDetails?.floor || ""
+                        },
+                        pictureProfileUrl: studentData.pictureProfileUrl || "",
+                        profilePictureUrl // Keep for backward compatibility
                     },
                     complaints: (studentData.complaints || []).map((complaint: any) => ({
                         id: complaint.id,
@@ -202,17 +219,17 @@ export async function GET(request: NextRequest) {
                     id: doc.id,
                     ...doc.data()
                 }));
-                
+
                 const hostelWardensData = hostelWardensSnap.docs.map(doc => ({
                     id: doc.id,
                     ...doc.data()
                 }));
-                
+
                 const floorWardensData = floorWardensSnap.docs.map(doc => ({
                     id: doc.id,
                     ...doc.data()
                 }));
-                
+
                 const floorAttendantsData = floorAttendantsSnap.docs.map(doc => ({
                     id: doc.id,
                     ...doc.data()
@@ -244,8 +261,12 @@ export async function GET(request: NextRequest) {
                             studentId,
                             studentName,
                             studentEmail,
-                            studentRoom,
-                            hostel,
+                            hostelDetails: {
+                                hostelId: studentData.hostelDetails?.hostelId || hostel || "",
+                                room_id: studentData.hostelDetails?.room_id || studentRoom || "",
+                                roomNumber: studentData.hostelDetails?.roomNumber || "",
+                                floor: studentData.hostelDetails?.floor || ""
+                            },
                             timestamp: formatTimestamp(issue.timestamp || issue.date || new Date())
                         }));
                         allIssues.push(...formattedIssues);
@@ -260,8 +281,12 @@ export async function GET(request: NextRequest) {
                             studentId,
                             studentName,
                             studentEmail,
-                            studentRoom,
-                            hostel,
+                            hostelDetails: {
+                                hostelId: studentData.hostelDetails?.hostelId || hostel || "",
+                                room_id: studentData.hostelDetails?.room_id || studentRoom || "",
+                                roomNumber: studentData.hostelDetails?.roomNumber || "",
+                                floor: studentData.hostelDetails?.floor || ""
+                            },
                             timestamp: formatTimestamp(complaint.timestamp || complaint.date || new Date())
                         }));
                         allIssues.push(...formattedComplaints);
@@ -276,8 +301,12 @@ export async function GET(request: NextRequest) {
                             studentId,
                             studentName,
                             studentEmail,
-                            studentRoom,
-                            hostel,
+                            hostelDetails: {
+                                hostelId: studentData.hostelDetails?.hostelId || hostel || "",
+                                room_id: studentData.hostelDetails?.room_id || studentRoom || "",
+                                roomNumber: studentData.hostelDetails?.roomNumber || "",
+                                floor: studentData.hostelDetails?.floor || ""
+                            },
                             timestamp: formatTimestamp(maintenance.timestamp || maintenance.date || new Date())
                         }));
                         allIssues.push(...formattedMaintenance);
@@ -425,20 +454,20 @@ export async function GET(request: NextRequest) {
                             .then(snapshot => snapshot.docs)
                     )
                 );
-                
+
                 // Process students' issues
                 const floorIssues: Issue[] = [];
-                
+
                 floorStudents.flat().forEach(doc => {
                     const studentData = doc.data();
                     const studentId = doc.id;
                     const studentName = studentData.fullName;
-                    
+
                     if (studentData.issues) {
                         floorIssues.push(...mapIssuesWithStudent(studentData.issues, studentId, studentName));
                     }
                 });
-                
+
                 responseData = {
                     floorWarden: floorWardenData,
                     floors: floorsData.filter(Boolean),
@@ -489,7 +518,7 @@ export async function GET(request: NextRequest) {
                     const studentData = doc.data();
                     const studentId = doc.id;
                     const studentName = studentData.fullName;
-                    
+
                     if (studentData.maintenance) {
                         floorMaintenance.push(...mapItemsWithStudent(
                             studentData.maintenance,
@@ -497,13 +526,13 @@ export async function GET(request: NextRequest) {
                             studentName
                         ));
                     }
-                    
+
                     if (studentData.issues) {
                         // Filter only maintenance type issues for floor attendant
-                        const maintenanceIssues = studentData.issues.filter((issue: any) => 
+                        const maintenanceIssues = studentData.issues.filter((issue: any) =>
                             issue.type === 'maintenance'
                         );
-                        
+
                         if (maintenanceIssues.length > 0) {
                             floorIssues.push(...mapIssuesWithStudent(
                                 maintenanceIssues,
@@ -568,24 +597,29 @@ export async function GET(request: NextRequest) {
                     const studentsSnapshot = await db.collection("students")
                         .where("hostelDetails.hostel", "==", hostelId)
                         .get();
-                    
+
                     if (studentsSnapshot.empty) {
                         // Try alternative field name
                         const altStudentsSnapshot = await db.collection("students")
                             .where("hostel", "==", hostelId)
                             .get();
-                        
+
                         students = altStudentsSnapshot.docs.map(doc => {
                             const data = doc.data();
                             return {
                                 id: doc.id,
-                                name: data.fullName || data.name || "Unknown",
+                                fullName: data.fullName || data.name || "Unknown",
                                 email: data.email || "",
                                 course: data.course || "",
+                                year: data.year || "",
                                 department: data.department || "",
-                                room: data.hostelDetails?.roomNumber || data.room || "",
-                                hostel: data.hostelDetails?.hostel || data.hostel || "",
-                                profilePictureUrl: data.profilePictureUrl || ""
+                                hostelDetails: {
+                                    hostelId: data.hostelDetails?.hostelId || data.hostel || "",
+                                    room_id: data.hostelDetails?.room_id || data.room || "",
+                                    roomNumber: data.hostelDetails?.roomNumber || "",
+                                    floor: data.hostelDetails?.floor || ""
+                                },
+                                profilePictureUrl: data.pictureProfileUrl || data.profilePictureUrl || ""
                             };
                         });
                     } else {
@@ -593,13 +627,18 @@ export async function GET(request: NextRequest) {
                             const data = doc.data();
                             return {
                                 id: doc.id,
-                                name: data.fullName || data.name || "Unknown",
+                                fullName: data.fullName || data.name || "Unknown",
                                 email: data.email || "",
                                 course: data.course || "",
+                                year: data.year || "",
                                 department: data.department || "",
-                                room: data.hostelDetails?.roomNumber || data.room || "",
-                                hostel: data.hostelDetails?.hostel || data.hostel || "",
-                                profilePictureUrl: data.profilePictureUrl || ""
+                                hostelDetails: {
+                                    hostelId: data.hostelDetails?.hostelId || data.hostel || "",
+                                    room_id: data.hostelDetails?.room_id || data.room || "",
+                                    roomNumber: data.hostelDetails?.roomNumber || "",
+                                    floor: data.hostelDetails?.floor || ""
+                                },
+                                profilePictureUrl: data.pictureProfileUrl || data.profilePictureUrl || ""
                             };
                         });
                     }
@@ -611,7 +650,7 @@ export async function GET(request: NextRequest) {
                     floors,
                     students,
                 };
-                
+
                 break;
             }
 
