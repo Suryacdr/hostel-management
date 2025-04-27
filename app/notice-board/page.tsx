@@ -83,6 +83,7 @@ export default function NoticeBoard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'solved'>('all');
   const [error, setError] = useState<string | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   // Format date for display
   const formatDate = (date: Date): string => {
@@ -111,71 +112,54 @@ export default function NoticeBoard() {
     try {
       setIsLoading(true);
       const user = auth.currentUser;
-      if (!user) {
-        throw new Error("User not logged in");
-      }
-
-      const token = await user.getIdToken(true);
+      setIsLoggedIn(!!user);
       
-      // Use the new dedicated API endpoint with optional status filter
+      // Use the API endpoint with optional status filter
       let url = '/api/issue/all-issues';
+      const queryParams = new URLSearchParams();
+      
       if (filterStatus !== 'all') {
-        url += `?status=${filterStatus}&type=maintenance`;
-      } else {
-        url += '?type=maintenance'; // Only fetch maintenance issues
+        queryParams.set('status', filterStatus);
       }
+      
+      queryParams.set('type', 'maintenance');
+      url = `${url}?${queryParams.toString()}`;
+      
+      console.log(`Fetching issues from: ${url}`);
       
       const response = await fetch(url, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        // Prevent caching
+        cache: 'no-store'
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        let errorMessage = "Failed to fetch maintenance issues";
-        
-        try {
-          const errorData = JSON.parse(errorText);
-          errorMessage = errorData.error || errorMessage;
-        } catch (parseError) {
-          errorMessage = errorText || response.statusText || errorMessage;
-        }
-        
-        throw new Error(errorMessage);
+        throw new Error(`API request failed with status ${response.status}`);
       }
 
-      const responseText = await response.text();
-      if (!responseText.trim()) {
-        console.log("Empty response received from server");
-        setIssues([]);
-        setFilteredIssues([]);
-        return;
-      }
-
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error("Error parsing JSON response:", parseError);
-        throw new Error("Invalid data format received from server");
+      const data = await response.json();
+      
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid response format from API');
       }
       
-      // Use the maintenanceIssues property from the new API response
-      const allIssues = data.maintenanceIssues || [];
+      // Use the maintenanceIssues property from the API response
+      const allIssues = Array.isArray(data.maintenanceIssues) ? data.maintenanceIssues : [];
+      console.log(`Received ${allIssues.length} maintenance issues`);
 
       const formattedIssues = allIssues.map((issue: any) => ({
-        id: issue.id || issue.timestamp || `issue-${Date.now()}`,
-        studentId: issue.studentId,
-        studentName: issue.studentName,
-        message: issue.message,
+        id: issue.id || `issue-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        studentId: issue.studentId || '',
+        studentName: issue.studentName || 'Anonymous',
+        message: issue.message || '',
         timestamp: new Date(issue.timestamp || Date.now()),
-        type: issue.type,
+        type: issue.type || 'maintenance',
         solved: issue.solved ?? issue.isSolved ?? false,
         hostel: issue.hostel || "",
-        room: issue.studentRoom || "",
+        room: issue.studentRoom || issue.room || "",
         floor: issue.floor || ""
       }));
 
@@ -183,7 +167,10 @@ export default function NoticeBoard() {
       setFilteredIssues(formattedIssues);
     } catch (err) {
       console.error("Error fetching maintenance issues:", err);
-      setError(err instanceof Error ? err.message : "An error occurred");
+      setError(err instanceof Error ? err.message : "An error occurred while fetching issues");
+      // Set empty arrays to prevent undefined errors
+      setIssues([]);
+      setFilteredIssues([]);
     } finally {
       setIsLoading(false);
     }
@@ -211,16 +198,34 @@ export default function NoticeBoard() {
   // Fetch issues when filter status changes or on component mount
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (user) {
-        fetchMaintenanceIssues();
-      } else {
-        setIsLoading(false);
-        setError("Please login to view maintenance issues");
-      }
+      // Always fetch issues, regardless of authentication status
+      fetchMaintenanceIssues().catch(err => {
+        console.error("Failed to fetch maintenance issues:", err);
+        setError("Failed to fetch maintenance issues. Please try again later.");
+      });
     });
 
     return () => unsubscribe();
   }, [filterStatus]);
+
+  const LoginBanner = () => (
+    <div className="bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-700 rounded-lg p-4 mb-6">
+      <div className="flex items-center gap-3">
+        <div className="flex-shrink-0 bg-indigo-100 dark:bg-indigo-800 p-2 rounded-full">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-indigo-600 dark:text-indigo-300" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+          </svg>
+        </div>
+        <div className="flex-1">
+          <p className="text-indigo-700 dark:text-indigo-300 font-medium">You're viewing in guest mode</p>
+          <p className="text-indigo-600/80 dark:text-indigo-400/80 text-sm">Login to submit maintenance requests and track your issues</p>
+        </div>
+        <Link href="/login" className="flex-shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+          Login
+        </Link>
+      </div>
+    </div>
+  );
 
   if (error) {
     return (
@@ -234,7 +239,7 @@ export default function NoticeBoard() {
           <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-2">Error</h2>
           <p className="text-gray-600 dark:text-gray-300 mb-6">{error}</p>
           <Link href="/" className="inline-block bg-indigo-600 text-white px-5 py-3 rounded-lg font-medium hover:bg-indigo-700 transition-colors">
-            Go to Login
+            Go to Home
           </Link>
         </div>
       </div>
@@ -255,12 +260,19 @@ export default function NoticeBoard() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {!isLoggedIn && (
+              <Link href="/login" className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Login
+              </Link>
+            )}
             <ThemeToggle />
           </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-6">
+        {!isLoggedIn && <LoginBanner />}
+        
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-4">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-1">
