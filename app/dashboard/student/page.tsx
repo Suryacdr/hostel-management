@@ -21,6 +21,8 @@ import {
   DoorOpen,
   Settings,
   Camera,
+  Hash,
+  Mail,
 } from "lucide-react";
 import React from "react";
 import { auth } from "@/lib/firebase";
@@ -37,25 +39,35 @@ interface Post {
   author: string;
   solved: boolean;
   completeDate?: string;
-  hostelDetails?: { hostel: string; floor: string; roomNumber: string };
+  hostelDetails?: {
+    hostelId: string;
+    floor: string;
+    roomNumber: string;
+    room_id?: string;
+  };
   category?: string;
 }
 
 interface StudentData {
-  name: string;
+  fullName: string;
   id: string;
   email: string;
   course: string;
+  year: string;
   department: string;
-  room: string;
-  floor: string;
+  dateOfOccupancy: string;
   profilePictureUrl: string;
   registrationNumber: string;
   hostel?: string;
-  hostelDetails?: { hostel: string; floor: string; roomNumber: string };
+  hostelDetails?: {
+    hostelId: string;
+    floor: string;
+    roomNumber: string;
+    room_id: string;
+  };
 }
 
-// Memoized Post Form Component
+// Memoized Post Form Component - Fix hostel property
 const PostForm = React.memo(
   ({
     onSubmitPost,
@@ -65,7 +77,12 @@ const PostForm = React.memo(
     onSubmitPost: (
       content: string,
       type: "Complaint" | "Maintenance",
-      hostelDetails: { hostel: string; floor: string; roomNumber: string },
+      hostelDetails: {
+        hostelId: string;
+        floor: string;
+        roomNumber: string;
+        room_id?: string;
+      },
       category?: string
     ) => Promise<void>;
     isLoading: boolean;
@@ -83,18 +100,16 @@ const PostForm = React.memo(
       if (!studentData) return null;
 
       // Use hostelDetails object or extract from room
-      const hostel =
-        studentData.hostelDetails?.hostel ||
-        studentData.room?.split("-")[0] ||
-        "";
+      const hostelId = studentData.hostelDetails?.hostelId || "";
       const floor = studentData.hostelDetails?.floor || "";
-      const roomNumber =
-        studentData.hostelDetails?.roomNumber || studentData.room || "";
+      const roomNumber = studentData.hostelDetails?.roomNumber || "";
+      const room_id = studentData.hostelDetails?.room_id || "";
 
       return {
-        hostel,
+        hostelId,
         floor,
         roomNumber,
+        room_id,
       };
     }, [studentData]);
 
@@ -206,7 +221,7 @@ const PostForm = React.memo(
                       <div className="flex flex-wrap gap-2 text-sm">
                         <span className="inline-flex items-center gap-1 px-2 py-1 bg-white dark:bg-slate-700 rounded shadow-sm">
                           <Building2 size={14} className="text-indigo-500" />
-                          {hostelDetails.hostel}
+                          {hostelDetails.hostelId}
                         </span>
                         <span className="inline-flex items-center gap-1 px-2 py-1 bg-white dark:bg-slate-700 rounded shadow-sm">
                           <ArrowUp size={14} className="text-indigo-500" />
@@ -425,7 +440,7 @@ export default function StudentDashboard() {
 
   const handleOpenEditModal = () => {
     if (studentData) {
-      const nameParts = studentData.name.split(" ");
+      const nameParts = studentData.fullName.split(" ");
       setFirstName(nameParts[0] || "");
       setLastName(nameParts.slice(1).join(" ") || "");
     }
@@ -511,11 +526,11 @@ export default function StudentDashboard() {
 
       // Format the issues for display
       const formattedPosts = allIssues.map((issue: any) => {
-        // Prefer issue.hostel, issue.floor, etc. if available, else fallback to studentData
-        const hostel =
-          issue.hostel ||
+        // Prefer issue.hostelId, issue.floor, etc. if available, else fallback to studentData
+        const hostelId =
+          issue.hostelId ||
           data.student?.hostel ||
-          data.student?.hostelDetails?.hostel ||
+          data.student?.hostelDetails?.hostelId ||
           data.student?.room?.split("-")[0] ||
           "";
         const floor =
@@ -525,15 +540,22 @@ export default function StudentDashboard() {
           "";
         const roomNumber =
           issue.room ||
+          issue.roomNumber ||
           issue.studentRoom ||
           data.student?.hostelDetails?.roomNumber ||
           data.student?.room ||
           "";
+        const room_id =
+          issue.room_id ||
+          data.student?.hostelDetails?.room_id ||
+          data.student?.room ||
+          "";
 
         const hostelDetails = {
-          hostel,
+          hostelId,
           floor,
           roomNumber,
+          room_id,
         };
 
         return {
@@ -648,7 +670,7 @@ export default function StudentDashboard() {
       const updateData: Record<string, any> = {};
 
       const fullName = `${firstName} ${lastName}`.trim();
-      if (fullName && fullName !== studentData?.name) {
+      if (fullName && fullName !== studentData?.fullName) {
         updateData.name = fullName;
 
         await updateProfile(user, { displayName: fullName });
@@ -702,7 +724,12 @@ export default function StudentDashboard() {
     async (
       content: string,
       type: "Complaint" | "Maintenance",
-      hostelDetails: { hostel: string; floor: string; roomNumber: string },
+      hostelDetails: {
+        hostelId: string;
+        floor: string;
+        roomNumber: string;
+        room_id?: string;
+      },
       category?: string
     ) => {
       try {
@@ -760,7 +787,7 @@ export default function StudentDashboard() {
           content,
           type,
           timestamp: new Date(),
-          author: studentData?.name || "You",
+          author: studentData?.fullName || "You",
           likes: 0,
           solved: false,
           hostelDetails,
@@ -859,7 +886,7 @@ export default function StudentDashboard() {
                     <div className="flex flex-col md:flex-row justify-between items-center md:items-start">
                       <div className="text-center md:text-left mb-4 md:mb-0">
                         <h2 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-white">
-                          {studentData?.name || ""}
+                          {studentData?.fullName || ""}
                         </h2>
                         <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-1">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-300">
@@ -937,19 +964,19 @@ export default function StudentDashboard() {
                       <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 rounded-lg shadow-sm">
                         <School size={16} className="text-indigo-500" />
                         <span className="text-xs md:text-sm font-medium">
-                          {studentData?.course || ""}
+                          {studentData?.hostelDetails?.hostelId}
                         </span>
                       </div>
                       <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 rounded-lg shadow-sm">
                         <BookOpen size={16} className="text-indigo-500" />
                         <span className="text-xs md:text-sm font-medium">
-                          {studentData?.department || ""}
+                          {studentData?.course} {studentData?.year}
                         </span>
                       </div>
                       <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 rounded-lg shadow-sm">
                         <Home size={16} className="text-indigo-500" />
                         <span className="text-xs md:text-sm font-medium">
-                          {studentData?.room || ""}
+                          {studentData?.hostelDetails?.room_id || ""}
                         </span>
                       </div>
                     </div>
@@ -1038,7 +1065,7 @@ export default function StudentDashboard() {
               ) : activeTab === "room" ? (
                 <RoomPhotoTab studentData={studentData} />
               ) : (
-                <RoommateTab />
+                <RoommateTab studentData={studentData} />
               )}
             </div>
           </div>
@@ -1079,8 +1106,8 @@ export default function StudentDashboard() {
                     <div className="mb-6 sm:mb-8">
                       <ProfileImageUploader
                         currentImageUrl={studentData?.profilePictureUrl || ""}
-                        studentName={studentData?.name || ""}
-                        roomNumber={studentData?.room}
+                        studentName={studentData?.fullName || ""}
+                        roomNumber={studentData?.hostelDetails?.room_id || ""}
                         onImageUploaded={handleImageUploaded}
                       />
                     </div>
@@ -1364,9 +1391,8 @@ const MessageBox: React.FC<
         <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex flex-wrap gap-2">
           <span className="inline-flex items-center gap-1">
             <Building2 size={12} />
-            {post.hostelDetails?.hostel ||
-              studentData?.hostelDetails?.hostel ||
-              studentData?.room?.split("-")?.[0] ||
+            {post.hostelDetails?.hostelId ||
+              studentData?.hostelDetails?.hostelId ||
               ""}
           </span>
           <span className="inline-flex items-center gap-1">
@@ -1374,7 +1400,6 @@ const MessageBox: React.FC<
             Floor:{" "}
             {post.hostelDetails?.floor ||
               studentData?.hostelDetails?.floor ||
-              studentData?.floor ||
               ""}
           </span>
           <span className="inline-flex items-center gap-1">
@@ -1382,7 +1407,6 @@ const MessageBox: React.FC<
             Room:{" "}
             {post.hostelDetails?.roomNumber ||
               studentData?.hostelDetails?.roomNumber ||
-              studentData?.room ||
               ""}
           </span>
           {post.type === "Maintenance" && post.category && (
@@ -1511,12 +1535,8 @@ const MessageBox: React.FC<
 // Room Photo Tab Component
 const RoomPhotoTab = React.memo(
   ({ studentData }: { studentData: StudentData | null }) => {
-    const hostelNumber =
-      studentData?.hostelDetails?.hostel ||
-      studentData?.room?.split("-")[0] ||
-      "A";
-    const roomNumber =
-      studentData?.hostelDetails?.roomNumber || studentData?.room || "A-101";
+    const hostelNumber = studentData?.hostelDetails?.hostelId || "";
+    const roomNumber = studentData?.hostelDetails?.roomNumber || "";
 
     return (
       <motion.div
@@ -1566,128 +1586,227 @@ const RoomPhotoTab = React.memo(
 RoomPhotoTab.displayName = "RoomPhotoTab";
 
 // Roommate Tab Component
-const RoommateTab = React.memo(() => {
-  // Dummy roommate data - in a real app, this would come from an API
-  const roommate = {
-    name: "Ramesh Chaiwala",
-    profilePictureUrl: "/boy.png", // Assuming you have a placeholder image
-    course: "Computer Applications",
-    department: "BCA",
-    phone: "+91 9867564378",
-    email: "ramesh.chaiwala@university.edu",
-    year: "3rd Year",
-  };
+const RoommateTab = React.memo(
+  ({ studentData }: { studentData: StudentData | null }) => {
+    const [roommates, setRoommates] = React.useState<StudentData[]>([]);
+    const [isLoading, setIsLoading] = React.useState<boolean>(true);
+    const [error, setError] = React.useState<string | null>(null);
 
-  return (
-    <motion.div
-      className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-5"
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2 }}
-    >
-      <div className="flex flex-col space-y-6">
-        <h2 className="text-lg font-semibold text-gray-800 dark:text-white flex items-center gap-2">
-          <User size={20} className="text-indigo-500" />
-          Your Roommate
-        </h2>
+    React.useEffect(() => {
+      const fetchRoommates = async () => {
+        if (!studentData?.hostelDetails?.room_id) {
+          setIsLoading(false);
+          setError("Room information not available");
+          return;
+        }
 
-        <div className="flex flex-col sm:flex-row gap-5">
-          {/* Profile Image */}
-          <div className="flex-shrink-0 flex flex-col items-center">
-            <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-full overflow-hidden ring-4 ring-white dark:ring-slate-700 bg-white dark:bg-slate-700 shadow-md">
-              <Image
-                src={roommate.profilePictureUrl}
-                width={150}
-                height={150}
-                alt="Roommate Profile"
-                className="object-cover w-full h-full"
-              />
+        try {
+          const user = auth.currentUser;
+          if (!user) {
+            setError("User not logged in");
+            setIsLoading(false);
+            return;
+          }
+
+          const token = await user.getIdToken(true);
+
+          // Create API endpoint URL with query parameters
+          const roommateUrl = new URL("/api/roommate", window.location.origin);
+          roommateUrl.searchParams.append(
+            "hostelId",
+            studentData.hostelDetails.hostelId
+          );
+          roommateUrl.searchParams.append(
+            "roomId",
+            studentData.hostelDetails.room_id
+          );
+          roommateUrl.searchParams.append(
+            "userId",
+            studentData.id // Send current user ID to exclude from results
+          );
+
+          const response = await fetch(roommateUrl.toString(), {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          });
+
+          if (!response.ok) {
+            throw new Error("Failed to fetch roommate data");
+          }
+
+          const data = await response.json();
+          setRoommates(data.students || []);
+        } catch (error) {
+          console.error("Error fetching roommates:", error);
+          setError(error instanceof Error ? error.message : "Unknown error");
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      fetchRoommates();
+    }, [studentData]);
+
+    // Show loading state
+    if (isLoading) {
+      return (
+        <motion.div className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-5">
+          <div className="animate-pulse flex flex-col space-y-4">
+            <div className="h-8 bg-gray-200 dark:bg-slate-700 rounded w-1/3"></div>
+            <div className="flex flex-col sm:flex-row gap-5">
+              <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-full bg-gray-200 dark:bg-slate-700"></div>
+              <div className="flex-1 space-y-4">
+                <div className="h-6 bg-gray-200 dark:bg-slate-700 rounded w-3/4"></div>
+                <div className="space-y-3">
+                  <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded"></div>
+                  <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded"></div>
+                </div>
+              </div>
             </div>
           </div>
+        </motion.div>
+      );
+    }
 
-          {/* Details */}
-          <div className="flex-1 flex flex-col justify-center">
-            <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-2">
-              {roommate.name}
+    // Show error state
+    if (error) {
+      return (
+        <motion.div className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-5">
+          <div className="flex flex-col items-center justify-center py-10">
+            <User className="h-16 w-16 text-gray-300 dark:text-gray-600 mb-4" />
+            <h3 className="text-xl font-medium text-gray-700 dark:text-gray-200 mb-2">
+              Error loading roommate
             </h3>
+            <p className="text-gray-500 dark:text-gray-400 text-center max-w-md">
+              {error}
+            </p>
+          </div>
+        </motion.div>
+      );
+    }
 
-            <div className="space-y-3">
-              <div className="flex items-start gap-3 text-sm">
-                <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center flex-shrink-0">
-                  <School
-                    size={16}
-                    className="text-indigo-600 dark:text-indigo-400"
+    // Show empty state when no roommates found
+    if (roommates.length === 0) {
+      return (
+        <motion.div
+          className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-5"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <div className="flex flex-col items-center justify-center py-10">
+            <User className="h-16 w-16 text-gray-300 dark:text-gray-600 mb-4" />
+            <h3 className="text-xl font-medium text-gray-700 dark:text-gray-200 mb-2">
+              No roommate found
+            </h3>
+            <p className="text-gray-500 dark:text-gray-400 text-center max-w-md">
+              You don't seem to have a roommate assigned to your room at this
+              time.
+            </p>
+          </div>
+        </motion.div>
+      );
+    }
+
+    // Show roommates
+    return (
+      <motion.div
+        className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-5"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2 }}
+      >
+        <div className="flex flex-col space-y-6">
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+            <User size={20} className="text-indigo-500" />
+            {roommates.length > 1 ? "Your Roommates" : "Your Roommate"}
+          </h2>
+
+          {roommates.map((roommate) => (
+            <div
+              key={roommate.id}
+              className="flex flex-col sm:flex-row gap-5 border-b border-gray-100 dark:border-slate-700 pb-6 last:border-0 last:pb-0"
+            >
+              {/* Profile Image */}
+              <div className="flex-shrink-0 flex flex-col items-center">
+                <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-full overflow-hidden ring-4 ring-white dark:ring-slate-700 bg-white dark:bg-slate-700 shadow-md">
+                  <Image
+                    src={roommate.profilePictureUrl || "/boy.png"}
+                    width={150}
+                    height={150}
+                    alt="Roommate Profile"
+                    className="object-cover w-full h-full"
                   />
                 </div>
-                <div>
-                  <p className="font-medium text-gray-800 dark:text-gray-200">
-                    {roommate.course}
-                  </p>
-                  <p className="text-gray-500 dark:text-gray-400">
-                    {roommate.department}, {roommate.year}
-                  </p>
-                </div>
               </div>
 
-              <div className="flex items-start gap-3 text-sm">
-                <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center flex-shrink-0">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="text-green-600 dark:text-green-400"
-                  >
-                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-                  </svg>
-                </div>
-                <div>
-                  <p className="font-medium text-gray-800 dark:text-gray-200">
-                    Phone
-                  </p>
-                  <p className="text-gray-500 dark:text-gray-400">
-                    {roommate.phone}
-                  </p>
-                </div>
-              </div>
+              {/* Details */}
+              <div className="flex-1 flex flex-col justify-center">
+                <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-2">
+                  {roommate.fullName}
+                </h3>
 
-              <div className="flex items-start gap-3 text-sm">
-                <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center flex-shrink-0">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="text-blue-600 dark:text-blue-400"
-                  >
-                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                    <polyline points="22,6 12,13 2,6"></polyline>
-                  </svg>
-                </div>
-                <div>
-                  <p className="font-medium text-gray-800 dark:text-gray-200">
-                    Email
-                  </p>
-                  <p className="text-gray-500 dark:text-gray-400">
-                    {roommate.email}
-                  </p>
+                <div className="space-y-3">
+                  <div className="flex items-start gap-3 text-sm">
+                    <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                      <School
+                        size={16}
+                        className="text-indigo-600 dark:text-indigo-400"
+                      />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-800 dark:text-gray-200">
+                        Course
+                      </p>
+                      <p className="text-gray-500 dark:text-gray-400">
+                        {roommate.course} {roommate.year}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 text-sm">
+                    <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                      <Hash
+                        className="text-green-600 dark:text-green-400"
+                        size={16}
+                      />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-800 dark:text-gray-200">
+                        Registration Number
+                      </p>
+                      <p className="text-gray-500 dark:text-gray-400">
+                        {roommate.registrationNumber}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 text-sm">
+                    <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                      <Mail
+                        className="text-indigo-600 dark:text-indigo-400"
+                        size={16}
+                      />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-800 dark:text-gray-200">
+                        Email
+                      </p>
+                      <p className="text-gray-500 dark:text-gray-400">
+                        {roommate.email}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          ))}
         </div>
-      </div>
-    </motion.div>
-  );
-});
+      </motion.div>
+    );
+  }
+);
 RoommateTab.displayName = "RoommateTab";
