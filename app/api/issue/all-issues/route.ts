@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     const issuesRef = adminDb.collection('maintenance_issues');
     
     // Start building the query with basic conditions
-    let issuesQuery = issuesRef;
+    let issuesQuery: Query<DocumentData> = issuesRef;
     
     // Add filters based on parameters
     if (status === 'pending') {
@@ -99,13 +99,16 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Error fetching maintenance issues:', error);
     
-    // Return error response
+    // Create a guaranteed non-null payload object
+    const errorPayload = { 
+      error: 'Failed to fetch maintenance issues', 
+      message: error instanceof Error ? error.message : 'Unknown error',
+      maintenanceIssues: [] // Return empty array to avoid client-side errors
+    };
+    
+    // Return error response with the valid payload object
     return NextResponse.json(
-      { 
-        error: 'Failed to fetch maintenance issues', 
-        message: error instanceof Error ? error.message : 'Unknown error',
-        maintenanceIssues: [] // Return empty array to avoid client-side errors
-      },
+      errorPayload,
       { 
         status: 500,
         headers: { 
