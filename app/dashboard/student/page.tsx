@@ -862,7 +862,7 @@ export default function StudentDashboard() {
               ) : (
                 <>
                   <div className="relative">
-                    <div className="w-28 h-28 md:w-32 md:h-32 rounded-full overflow-hidden ring-4 ring-white dark:ring-slate-700 bg-white dark:bg-slate-700 shadow-md flex-shrink-0">
+                    <div className="w-28 h-28 md:w-32 md:h-32 rounded-full overflow-hidden ring-4 ring-white dark:ring-slate-700 bg-white dark:bg-slate-700 shadow-md shrink-0">
                       <Image
                         src={studentData?.profilePictureUrl || "/boy.png"}
                         width={150}
@@ -1173,7 +1173,7 @@ export default function StudentDashboard() {
                       </button>
                       <button
                         type="submit"
-                        className="w-full sm:w-auto px-6 py-3 text-sm font-medium text-white bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg hover:from-indigo-600 hover:to-purple-700 transition-colors"
+                        className="w-full sm:w-auto px-6 py-3 text-sm font-medium text-white bg-linear-to-r from-indigo-500 to-purple-600 rounded-lg hover:from-indigo-600 hover:to-purple-700 transition-colors"
                       >
                         {isLoading ? (
                           <span className="flex items-center justify-center">
@@ -1218,7 +1218,7 @@ export default function StudentDashboard() {
 const ProfileSkeleton = () => {
   return (
     <div className="flex flex-col md:flex-row items-center md:items-end gap-6 md:gap-10 w-full">
-      <div className="w-32 h-32 md:w-36 md:h-36 rounded-full bg-gray-200 dark:bg-slate-700 flex-shrink-0 animate-pulse"></div>
+      <div className="w-32 h-32 md:w-36 md:h-36 rounded-full bg-gray-200 dark:bg-slate-700 shrink-0 animate-pulse"></div>
       <div className="flex-1 w-full">
         <div className="flex flex-col md:flex-row justify-between items-center md:items-start w-full">
           <div className="space-y-3 text-center md:text-left">
@@ -1363,7 +1363,7 @@ const MessageBox: React.FC<
   return (
     <div className="bg-white dark:bg-slate-800 p-4 md:p-5 rounded-xl shadow-md hover:shadow-lg transition-shadow">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 md:w-12 md:h-12 rounded-full overflow-hidden flex-shrink-0 ring-1 ring-gray-100 dark:ring-slate-700">
+        <div className="w-10 h-10 md:w-12 md:h-12 rounded-full overflow-hidden shrink-0 ring-1 ring-gray-100 dark:ring-slate-700">
           <Image
             src={studentData?.profilePictureUrl || "/boy.png"}
             width={50}
@@ -1731,7 +1731,7 @@ const RoommateTab = React.memo(
               className="flex flex-col sm:flex-row gap-5 border-b border-gray-100 dark:border-slate-700 pb-6 last:border-0 last:pb-0"
             >
               {/* Profile Image */}
-              <div className="flex-shrink-0 flex flex-col items-center">
+              <div className="shrink-0 flex flex-col items-center">
                 <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-full overflow-hidden ring-4 ring-white dark:ring-slate-700 bg-white dark:bg-slate-700 shadow-md">
                   <Image
                     src={roommate.profilePictureUrl || "/boy.png"}
@@ -1751,7 +1751,7 @@ const RoommateTab = React.memo(
 
                 <div className="space-y-3">
                   <div className="flex items-start gap-3 text-sm">
-                    <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                    <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center shrink-0">
                       <School
                         size={16}
                         className="text-indigo-600 dark:text-indigo-400"
@@ -1768,7 +1768,7 @@ const RoommateTab = React.memo(
                   </div>
 
                   <div className="flex items-start gap-3 text-sm">
-                    <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                    <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center shrink-0">
                       <Hash
                         className="text-green-600 dark:text-green-400"
                         size={16}
@@ -1785,7 +1785,7 @@ const RoommateTab = React.memo(
                   </div>
 
                   <div className="flex items-start gap-3 text-sm">
-                    <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                    <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center shrink-0">
                       <Mail
                         className="text-indigo-600 dark:text-indigo-400"
                         size={16}

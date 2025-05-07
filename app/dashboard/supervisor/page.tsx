@@ -318,7 +318,7 @@ export default function SupervisorDashboard() {
               ) : (
                 <>
                   <div className="relative">
-                    <div className="w-28 h-28 md:w-32 md:h-32 rounded-full overflow-hidden ring-4 ring-white dark:ring-slate-700 bg-white dark:bg-slate-700 shadow-md flex-shrink-0">
+                    <div className="w-28 h-28 md:w-32 md:h-32 rounded-full overflow-hidden ring-4 ring-white dark:ring-slate-700 bg-white dark:bg-slate-700 shadow-md shrink-0">
                       <Image
                         src={data?.supervisor?.profilePictureUrl || "/boy.png"}
                         width={150}
@@ -546,7 +546,7 @@ export default function SupervisorDashboard() {
                         >
                           <div className="flex items-start gap-3">
                             <div
-                              className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 
+                              className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 
                               ${issue.type === 'maintenance'
                                 ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
                                 : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'}`}
@@ -782,7 +782,7 @@ export default function SupervisorDashboard() {
 const ProfileSkeleton = () => {
   return (
     <div className="flex flex-col md:flex-row items-center md:items-end gap-6 md:gap-10 w-full">
-      <div className="w-32 h-32 md:w-36 md:h-36 rounded-full bg-gray-200 dark:bg-slate-700 flex-shrink-0 animate-pulse"></div>
+      <div className="w-32 h-32 md:w-36 md:h-36 rounded-full bg-gray-200 dark:bg-slate-700 shrink-0 animate-pulse"></div>
       <div className="flex-1 w-full">
         <div className="flex flex-col md:flex-row justify-between items-center md:items-start w-full">
           <div className="space-y-3 text-center md:text-left">
