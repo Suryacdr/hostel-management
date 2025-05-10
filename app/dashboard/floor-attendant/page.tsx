@@ -17,6 +17,7 @@ import {
   ArrowUp,
   DoorOpen,
   Settings,
+  PenTool as Tool,
   UserCircle,
 } from "lucide-react";
 import Image from "next/image";
@@ -27,18 +28,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import AuthGuard from "@/components/AuthGuard";
 import Link from "next/link";
 
-interface StudentData {
-  id: string;
-  name: string;
-  email: string;
-  course: string;
-  department: string;
-  room: string;
-  hostel: string;
-  profilePictureUrl?: string;
-}
-
-interface Issue {
+interface MaintenanceIssue {
   id: string;
   message: string;
   type: string;
@@ -53,31 +43,43 @@ interface Issue {
   studentRoom?: string;
 }
 
-interface SupervisorProfile {
+interface Room {
+  id: string;
+  number: string;
+  capacity: number;
+  occupancy: number;
+}
+
+interface FloorAttendantProfile {
   fullName: string;
   email: string;
   phoneNumber: string;
   role: string;
+  assignedFloors: string[];
   assignedHostel: string;
   profilePictureUrl?: string;
 }
 
 interface DashboardData {
-  supervisor?: SupervisorProfile;
-  hostel?: any;
-  floors?: any[];
-  students?: StudentData[];
-  issues?: Issue[];
+  attendant?: FloorAttendantProfile;
+  floor?: {
+    id: string;
+    number: string;
+    hostelId: string;
+    hostelName?: string;
+  };
 }
 
-export default function SupervisorDashboard() {
+export default function FloorAttender() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [issues, setIssues] = useState<MaintenanceIssue[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'solved'>('all');
-  const [activeTab, setActiveTab] = useState<'issues' | 'students'>('issues');
+  const [activeTab, setActiveTab] = useState<'issues' | 'rooms'>('issues');
   const menuRef = useRef<HTMLDivElement>(null);
 
   const handleSignOut = () => {
@@ -112,12 +114,13 @@ export default function SupervisorDashboard() {
 
         setData((prev) => prev ? {
           ...prev,
-          supervisor: prev.supervisor ? {
-            ...prev.supervisor,
+          attendant: prev.attendant ? {
+            ...prev.attendant,
             profilePictureUrl: imageUrl
           } : undefined
         } : null);
 
+        // Only refetch profile/dashboard info, not issues/rooms
         fetchDashboardData();
       } catch (error) {
         console.error("Error updating profile picture:", error);
@@ -136,7 +139,7 @@ export default function SupervisorDashboard() {
 
       const token = await user.getIdToken(true);
 
-      // Fetch basic dashboard data
+      // Fetch basic dashboard data (profile, floor, etc.)
       const response = await fetch("/api/fetch", {
         method: "GET",
         headers: {
@@ -150,15 +153,36 @@ export default function SupervisorDashboard() {
       }
 
       const dashboardData = await response.json();
+      setData(dashboardData);
 
-      // Fetch issues with appropriate filtering
+      // Fetch rooms only once, not on every filter/tab change
+      setRooms(dashboardData.rooms || []);
+    } catch (err) {
+      console.error("Error fetching data:", err);
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch issues when filterStatus changes
+  const fetchIssues = async () => {
+    try {
+      setLoading(true);
+      const user = auth.currentUser;
+      if (!user) {
+        setError("User not authenticated");
+        return;
+      }
+
+      const token = await user.getIdToken(true);
+
       const issuesUrl = new URL("/api/issue/all-issues", window.location.origin);
-      
-      // Add status filter if needed
+
       if (filterStatus !== 'all') {
         issuesUrl.searchParams.append('status', filterStatus);
       }
-      
+
       const issuesResponse = await fetch(issuesUrl.toString(), {
         method: "GET",
         headers: {
@@ -172,18 +196,9 @@ export default function SupervisorDashboard() {
       }
 
       const issuesData = await issuesResponse.json();
-
-      // Combine the data
-      const combinedData: DashboardData = {
-        ...dashboardData,
-        issues: issuesData.maintenanceIssues || [],
-        students: dashboardData.students || []
-      };
-
-      setData(combinedData);
-      console.log("Dashboard data loaded for supervisor:", combinedData);
+      setIssues(issuesData.maintenanceIssues || []);
     } catch (err) {
-      console.error("Error fetching data:", err);
+      console.error("Error fetching issues:", err);
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setLoading(false);
@@ -191,20 +206,47 @@ export default function SupervisorDashboard() {
   };
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    fetchDashboardData();
   }, []);
 
   useEffect(() => {
-    fetchDashboardData();
+    fetchIssues();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterStatus]);
+
+  const handleStatusChange = async (issue: MaintenanceIssue, newStatus: boolean) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        setError("User not authenticated");
+        return;
+      }
+
+      const token = await user.getIdToken();
+
+      const response = await fetch("/api/issue/update-issue", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          issueId: issue.id,
+          solved: newStatus,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update issue status");
+      }
+
+      // Only refetch issues, not the whole dashboard
+      fetchIssues();
+    } catch (error) {
+      console.error("Error updating issue status:", error);
+      setError(error instanceof Error ? error.message : "An error occurred");
+    }
+  };
 
   // Format date for display
   const formatDate = (timestamp: Date | string): string => {
@@ -227,8 +269,8 @@ export default function SupervisorDashboard() {
     }
   };
 
-  // Issue Status Filter Component
-  const IssueStatusFilter = () => (
+  // Maintenance Status Filter Component
+  const MaintenanceStatusFilter = () => (
     <div className="flex flex-wrap gap-2 mb-6">
       <button
         onClick={() => setFilterStatus('all')}
@@ -238,7 +280,7 @@ export default function SupervisorDashboard() {
             : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
         }`}
       >
-        <Users size={16} />
+        <Tool size={16} />
         All Issues
       </button>
       <button
@@ -320,7 +362,7 @@ export default function SupervisorDashboard() {
                   <div className="relative">
                     <div className="w-28 h-28 md:w-32 md:h-32 rounded-full overflow-hidden ring-4 ring-white dark:ring-slate-700 bg-white dark:bg-slate-700 shadow-md flex-shrink-0">
                       <Image
-                        src={data?.supervisor?.profilePictureUrl || "/boy.png"}
+                        src={data?.attendant?.profilePictureUrl || "/boy.png"}
                         width={150}
                         height={150}
                         alt="Profile"
@@ -342,24 +384,24 @@ export default function SupervisorDashboard() {
                     <div className="flex flex-col md:flex-row justify-between items-center md:items-start">
                       <div className="text-center md:text-left mb-4 md:mb-0">
                         <h2 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-white">
-                          {data?.supervisor?.fullName || "Supervisor"}
+                          {data?.attendant?.fullName || "Floor Attendant"}
                         </h2>
                         <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-1">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300">
-                            {data?.supervisor?.role || "Supervisor"}
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 dark:bg-teal-900/40 text-teal-800 dark:text-teal-300">
+                            {data?.attendant?.role?.replace('_', ' ') || "Floor Attendant"}
                           </span>
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300">
-                            Hostel: {data?.supervisor?.assignedHostel || "Not Assigned"}
+                            Floor: {data?.floor?.number || data?.attendant?.assignedFloors?.[0] || "Not Assigned"}
                           </span>
                         </div>
                         <div className="text-sm text-gray-500 dark:text-gray-400 mt-2 flex items-center justify-center md:justify-start gap-1.5">
                           <Mail className="w-4 h-4" />
-                          {data?.supervisor?.email || ""}
+                          {data?.attendant?.email || ""}
                         </div>
-                        {data?.supervisor?.phoneNumber && (
+                        {data?.attendant?.phoneNumber && (
                           <div className="text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center justify-center md:justify-start gap-1.5">
                             <Phone className="w-4 h-4" />
-                            {data.supervisor.phoneNumber}
+                            {data.attendant.phoneNumber}
                           </div>
                         )}
                       </div>
@@ -411,24 +453,24 @@ export default function SupervisorDashboard() {
                     {/* Stats */}
                     <div className="flex flex-wrap justify-center md:justify-start gap-3 mt-4">
                       <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 rounded-lg shadow-sm">
-                        <Building2 size={16} className="text-blue-500" />
+                        <Building2 size={16} className="text-teal-500" />
                         <span className="text-xs md:text-sm font-medium">
-                          Hostel: {data?.hostel?.name || data?.supervisor?.assignedHostel || "Not Assigned"}
+                          Hostel: {data?.floor?.hostelName || data?.attendant?.assignedHostel || "Not Assigned"}
                         </span>
                       </div>
                       <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 rounded-lg shadow-sm">
-                        <Users size={16} className="text-indigo-500" />
+                        <DoorOpen size={16} className="text-teal-500" />
                         <span className="text-xs md:text-sm font-medium">
-                          {data?.students?.length || 0} Students
+                          {rooms.length || 0} Rooms
                         </span>
                       </div>
                       <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 rounded-lg shadow-sm">
                         <CircleDotDashed size={16} className="text-yellow-500" />
                         <span className="text-xs md:text-sm font-medium">
-                          {data?.issues?.filter(issue => !issue.solved)?.length || 0} Pending Issues
+                          {issues.filter(issue => !issue.solved)?.length || 0} Pending Issues
                         </span>
                       </div>
-                      <Link href="/notice-board" className="flex items-center gap-2 px-3 py-1.5 bg-blue-500 text-white rounded-lg shadow-sm hover:bg-blue-600 transition-colors">
+                      <Link href="/notice-board" className="flex items-center gap-2 px-3 py-1.5 bg-teal-500 text-white rounded-lg shadow-sm hover:bg-teal-600 transition-colors">
                         <span className="text-xs md:text-sm font-medium">
                           Maintenance Board
                         </span>
@@ -449,22 +491,22 @@ export default function SupervisorDashboard() {
               <button
                 className={`py-3 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'issues'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    ? 'border-teal-500 text-teal-600 dark:text-teal-400'
                     : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                 }`}
                 onClick={() => setActiveTab('issues')}
               >
-                Student Issues
+                All Issues
               </button>
               <button
                 className={`py-3 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'students'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                  activeTab === 'rooms'
+                    ? 'border-teal-500 text-teal-600 dark:text-teal-400'
                     : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                 }`}
-                onClick={() => setActiveTab('students')}
+                onClick={() => setActiveTab('rooms')}
               >
-                Students
+                Floor Rooms
               </button>
             </div>
           </div>
@@ -501,9 +543,9 @@ export default function SupervisorDashboard() {
             <>
               {activeTab === 'issues' && (
                 <>
-                  <IssueStatusFilter />
+                  <MaintenanceStatusFilter />
                   
-                  {(!data?.issues || data.issues.length === 0) ? (
+                  {(issues.length === 0) ? (
                     <motion.div
                       className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow text-center"
                       initial={{ opacity: 0, y: 20 }}
@@ -522,7 +564,13 @@ export default function SupervisorDashboard() {
                               strokeLinecap="round"
                               strokeLinejoin="round"
                               strokeWidth={1.5}
-                              d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
+                              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                            />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={1.5}
+                              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
                             />
                           </svg>
                         </div>
@@ -530,13 +578,13 @@ export default function SupervisorDashboard() {
                           No issues found
                         </h3>
                         <p className="text-gray-500 dark:text-gray-400">
-                          There are currently no {filterStatus !== 'all' ? filterStatus : ''} issues for your assigned hostel.
+                          There are currently no {filterStatus !== 'all' ? filterStatus : ''} issues for your floor.
                         </p>
                       </div>
                     </motion.div>
                   ) : (
                     <div className="space-y-4">
-                      {data.issues.map((issue, index) => (
+                      {issues.map((issue, index) => (
                         <motion.div
                           key={issue.id}
                           className="bg-white dark:bg-slate-800 p-4 md:p-5 rounded-xl shadow-md"
@@ -581,7 +629,7 @@ export default function SupervisorDashboard() {
                                     {formatDate(issue.timestamp)}
                                   </div>
                                 </div>
-                                <div className="mt-2 sm:mt-0">
+                                <div className="mt-2 sm:mt-0 flex items-center gap-2">
                                   <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                                     issue.solved
                                       ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
@@ -589,6 +637,16 @@ export default function SupervisorDashboard() {
                                   }`}>
                                     {issue.solved ? 'Resolved' : 'Pending'}
                                   </span>
+                                  <button 
+                                    onClick={() => handleStatusChange(issue, !issue.solved)}
+                                    className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                      issue.solved
+                                        ? 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+                                        : 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300 hover:bg-green-200'
+                                    }`}
+                                  >
+                                    {issue.solved ? 'Mark as Pending' : 'Mark as Resolved'}
+                                  </button>
                                 </div>
                               </div>
                               
@@ -616,22 +674,13 @@ export default function SupervisorDashboard() {
                                       Room: {issue.studentRoom || issue.room}
                                     </div>
                                   )}
-                                  {issue.type === 'maintenance' && issue.category && (
+                                  {issue.category && (
                                     <div className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300">
                                       <Settings size={12} className="mr-1" />
                                       {issue.category}
                                     </div>
                                   )}
                                 </div>
-                                <span
-                                  className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${
-                                    issue.type === 'maintenance'
-                                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300'
-                                      : 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300'
-                                  }`}
-                                >
-                                  {issue.type === 'maintenance' ? 'Maintenance' : 'Complaint'}
-                                </span>
                               </div>
                             </div>
                           </div>
@@ -642,9 +691,9 @@ export default function SupervisorDashboard() {
                 </>
               )}
 
-              {activeTab === 'students' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {(!data?.students || data.students.length === 0) ? (
+              {activeTab === 'rooms' && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {(rooms.length === 0) ? (
                     <motion.div
                       className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow text-center col-span-full"
                       initial={{ opacity: 0, y: 20 }}
@@ -663,56 +712,57 @@ export default function SupervisorDashboard() {
                               strokeLinecap="round"
                               strokeLinejoin="round"
                               strokeWidth={1.5}
-                              d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+                              d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
                             />
                           </svg>
                         </div>
                         <h3 className="text-xl font-medium text-gray-700 dark:text-gray-200 mb-2">
-                          No student data available
+                          No room data available
                         </h3>
                         <p className="text-gray-500 dark:text-gray-400">
-                          There are no students assigned to your hostel.
+                          There are no rooms assigned to your floor.
                         </p>
                       </div>
                     </motion.div>
                   ) : (
-                    data.students.map((student, index) => (
+                    rooms.map((room, index) => (
                       <motion.div
-                        key={student.id}
+                        key={room.id}
                         className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-md"
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3, delay: 0.05 * (index % 9) }}
                       >
-                        <div className="flex items-start gap-4">
-                          <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-100 dark:bg-slate-700">
-                            {student.profilePictureUrl ? (
-                              <Image
-                                src={student.profilePictureUrl}
-                                width={48}
-                                height={48}
-                                alt={student.name}
-                                className="object-cover w-full h-full"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-gray-400 dark:text-gray-500">
-                                <UserCircle size={24} />
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex-1">
-                            <h3 className="font-medium text-gray-800 dark:text-white">{student.name}</h3>
-                            <p className="text-sm text-blue-600 dark:text-blue-400">{student.course}</p>
-                            <div className="mt-2 space-y-1 text-sm text-gray-500 dark:text-gray-400">
-                              <div className="flex items-center gap-1">
-                                <Mail size={12} />
-                                {student.email}
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Building2 size={12} />
-                                {student.hostel} · Room {student.room}
-                              </div>
+                        <div className="flex justify-between items-start">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
+                              <DoorOpen className="w-5 h-5 text-teal-600 dark:text-teal-400" />
                             </div>
+                            <div>
+                              <h3 className="font-medium text-gray-800 dark:text-white text-lg">Room {room.number}</h3>
+                            </div>
+                          </div>
+                          <div className="px-3 py-1 bg-gray-100 dark:bg-slate-700 rounded-full text-xs font-medium">
+                            {room.occupancy}/{room.capacity} Occupied
+                          </div>
+                        </div>
+                        
+                        <div className="mt-4 pt-3 border-t border-gray-100 dark:border-slate-700">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-gray-500 dark:text-gray-400">Capacity</span>
+                            <span className="text-sm font-medium">{room.capacity} Students</span>
+                          </div>
+                          <div className="mt-2 w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2">
+                            <div 
+                              className={`h-2 rounded-full ${
+                                room.occupancy === room.capacity 
+                                ? 'bg-green-500' 
+                                : room.occupancy > 0 
+                                  ? 'bg-blue-500' 
+                                  : 'bg-gray-300 dark:bg-slate-600'
+                              }`}
+                              style={{ width: `${(room.occupancy / room.capacity) * 100}%` }}
+                            ></div>
                           </div>
                         </div>
                       </motion.div>
@@ -751,13 +801,13 @@ export default function SupervisorDashboard() {
 
                 <div className="p-6 sm:p-8">
                   <h2 className="text-2xl font-bold mb-6 dark:text-white flex items-center gap-2">
-                    <User size={24} className="text-blue-500" />
+                    <User size={24} className="text-teal-500" />
                     Edit Profile
                   </h2>
 
                   <ProfileImageUploader
-                    currentImageUrl={data?.supervisor?.profilePictureUrl || ""}
-                    studentName={data?.supervisor?.fullName || ""}
+                    currentImageUrl={data?.attendant?.profilePictureUrl || ""}
+                    studentName={data?.attendant?.fullName || ""}
                     onImageUploaded={handleImageUploaded}
                   />
 
