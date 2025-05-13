@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { auth } from "@/lib/firebase";
+import studentData from "../../../util/students.json";
 import {
   User,
   Mail,
@@ -21,6 +21,10 @@ import {
   Shield,
   GraduationCap,
   Bolt as Tool,
+  School as SchoolIcon,
+  Home as HomeIcon,
+  CalendarClock,
+  BadgePlus,
 } from "lucide-react";
 import Image from "next/image";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -29,6 +33,7 @@ import { signOut, updateProfile } from "firebase/auth";
 import { motion, AnimatePresence } from "framer-motion";
 import AuthGuard from "@/components/AuthGuard";
 import Link from "next/link";
+import { auth } from "@/lib/firebase";
 
 interface StaffMember {
   id: string;
@@ -44,13 +49,16 @@ interface StaffMember {
 
 interface StudentData {
   id: string;
-  name: string;
+  fullName: string;
   email: string;
   course: string;
-  department: string;
-  room: string;
-  hostel: string;
-  profilePictureUrl?: string;
+  year: string;
+  registrationNumber: string;
+  dateOfOccupancy: string;
+  hostelDetails?: {
+    roomNumber?: string;
+    floor?: string;
+  };
 }
 
 interface Issue {
@@ -99,14 +107,19 @@ export default function HostelWarden() {
   const [error, setError] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'solved'>('all');
-  const [activeTab, setActiveTab] = useState<'issues' | 'staff' | 'students'>('issues');
+  const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "solved">("all");
+  const [activeTab, setActiveTab] = useState<"issues" | "staff" | "students">("issues");
   const [staffMembers, setStaffMembers] = useState<{
     floorWardens: StaffMember[];
     floorAttendants: StaffMember[];
   }>({ floorWardens: [], floorAttendants: [] });
   const [students, setStudents] = useState<StudentData[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [studentsPerPage, setStudentsPerPage] = useState(12);
+  const [totalPages, setTotalPages] = useState(0);
 
   const handleSignOut = () => {
     signOut(auth)
@@ -138,13 +151,19 @@ export default function HostelWarden() {
           photoURL: imageUrl,
         });
 
-        setData((prev) => prev ? {
-          ...prev,
-          warden: prev.warden ? {
-            ...prev.warden,
-            profilePictureUrl: imageUrl
-          } : undefined
-        } : null);
+        setData((prev) =>
+          prev
+            ? {
+                ...prev,
+                warden: prev.warden
+                  ? {
+                      ...prev.warden,
+                      profilePictureUrl: imageUrl,
+                    }
+                  : undefined,
+              }
+            : null
+        );
 
         fetchDashboardData();
       } catch (error) {
@@ -179,15 +198,12 @@ export default function HostelWarden() {
 
       const dashboardData = await response.json();
       setData(dashboardData);
-      
+
       // Fetch issues with appropriate filtering
       fetchIssues();
 
       if (dashboardData.hostel?.id) {
-        await Promise.all([
-          fetchStaffMembers(dashboardData.hostel.id, token),
-          fetchStudents(dashboardData.hostel.id, token)
-        ]);
+        await Promise.all([fetchStaffMembers(dashboardData.hostel.id, token)]);
       }
     } catch (err) {
       console.error("Error fetching data:", err);
@@ -208,11 +224,11 @@ export default function HostelWarden() {
       const token = await user.getIdToken(true);
 
       const issuesUrl = new URL("/api/issue/all-issues", window.location.origin);
-      
-      if (filterStatus !== 'all') {
-        issuesUrl.searchParams.append('status', filterStatus);
+
+      if (filterStatus !== "all") {
+        issuesUrl.searchParams.append("status", filterStatus);
       }
-      
+
       const issuesResponse = await fetch(issuesUrl.toString(), {
         method: "GET",
         headers: {
@@ -227,11 +243,11 @@ export default function HostelWarden() {
 
       const issuesData = await issuesResponse.json();
 
-      setData(prev => {
+      setData((prev) => {
         if (!prev) return null;
         return {
           ...prev,
-          issues: issuesData.maintenanceIssues || []
+          issues: issuesData.maintenanceIssues || [],
         };
       });
     } catch (err) {
@@ -244,9 +260,9 @@ export default function HostelWarden() {
     try {
       // Fetch floor wardens
       const floorWardensUrl = new URL("/api/staff", window.location.origin);
-      floorWardensUrl.searchParams.append('role', 'floor_warden');
-      floorWardensUrl.searchParams.append('hostelId', hostelId);
-      
+      floorWardensUrl.searchParams.append("role", "floor_warden");
+      floorWardensUrl.searchParams.append("hostelId", hostelId);
+
       const floorWardensRes = await fetch(floorWardensUrl.toString(), {
         method: "GET",
         headers: {
@@ -254,12 +270,12 @@ export default function HostelWarden() {
           "Content-Type": "application/json",
         },
       });
-      
+
       // Fetch floor attendants
       const floorAttendantsUrl = new URL("/api/staff", window.location.origin);
-      floorAttendantsUrl.searchParams.append('role', 'floor_attendant');
-      floorAttendantsUrl.searchParams.append('hostelId', hostelId);
-      
+      floorAttendantsUrl.searchParams.append("role", "floor_attendant");
+      floorAttendantsUrl.searchParams.append("hostelId", hostelId);
+
       const floorAttendantsRes = await fetch(floorAttendantsUrl.toString(), {
         method: "GET",
         headers: {
@@ -267,40 +283,18 @@ export default function HostelWarden() {
           "Content-Type": "application/json",
         },
       });
-      
+
       if (floorWardensRes.ok && floorAttendantsRes.ok) {
         const floorWardensData = await floorWardensRes.json();
         const floorAttendantsData = await floorAttendantsRes.json();
-        
+
         setStaffMembers({
           floorWardens: floorWardensData.floorWardens || [],
-          floorAttendants: floorAttendantsData.floorAttendants || []
+          floorAttendants: floorAttendantsData.floorAttendants || [],
         });
       }
     } catch (error) {
       console.error("Error fetching staff members:", error);
-    }
-  };
-
-  const fetchStudents = async (hostelId: string, token: string) => {
-    try {
-      const studentsUrl = new URL("/api/students", window.location.origin);
-      studentsUrl.searchParams.append('hostelId', hostelId);
-      
-      const studentsRes = await fetch(studentsUrl.toString(), {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-      
-      if (studentsRes.ok) {
-        const studentsData = await studentsRes.json();
-        setStudents(studentsData.students || []);
-      }
-    } catch (error) {
-      console.error("Error fetching students:", error);
     }
   };
 
@@ -318,7 +312,24 @@ export default function HostelWarden() {
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+    try {
+      // Map studentData to match the StudentData interface
+      setStudents((studentData || []).map(student => ({
+        id: student.registrationNumber.toString(),
+        fullName: student.fullName,
+        email: student.email,
+        course: student.course,
+        year: student.year,
+        registrationNumber: student.registrationNumber.toString(),
+        dateOfOccupancy: student.dateOfOccupancy,
+        hostelDetails: student.hostelDetails
+      })));
+      setTotalPages(Math.ceil(studentData.length / studentsPerPage));
+    } catch (err) {
+      console.error("Error loading student data:", err);
+      setError(err instanceof Error ? err.message : "Error loading student data");
+    }
+  }, [studentsPerPage]);
 
   useEffect(() => {
     if (data?.hostel?.id) {
@@ -326,65 +337,104 @@ export default function HostelWarden() {
     }
   }, [filterStatus, data?.hostel?.id]);
 
-  // Format date for display
-  const formatDate = (timestamp: Date | string): string => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-
-    if (diffInDays === 0) {
-      const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
-      if (diffInHours === 0) {
-        return `${Math.floor((now.getTime() - date.getTime()) / (1000 * 60))} minutes ago`;
-      }
-      return `${diffInHours} hours ago`;
-    } else if (diffInDays === 1) {
-      return 'Yesterday';
-    } else if (diffInDays < 7) {
-      return `${diffInDays} days ago`;
-    } else {
-      return date.toLocaleDateString();
-    }
+  // Handle page change
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // Issue Status Filter Component
-  const IssueStatusFilter = () => (
-    <div className="flex flex-wrap gap-2 mb-6">
-      <button
-        onClick={() => setFilterStatus('all')}
-        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-          filterStatus === 'all' 
-            ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' 
-            : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
-        }`}
-      >
-        <Users size={16} />
-        All Issues
-      </button>
-      <button
-        onClick={() => setFilterStatus('pending')}
-        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-          filterStatus === 'pending' 
-            ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' 
-            : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
-        }`}
-      >
-        <CircleDotDashed size={16} />
-        Pending
-      </button>
-      <button
-        onClick={() => setFilterStatus('solved')}
-        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-          filterStatus === 'solved' 
-            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' 
-            : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
-        }`}
-      >
-        <CheckCheck size={16} />
-        Resolved
-      </button>
-    </div>
-  );
+  // Handle items per page change
+  const handleChangeItemsPerPage = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    setStudentsPerPage(parseInt(event.target.value));
+    setCurrentPage(1);
+    setTotalPages(Math.ceil(students.length / parseInt(event.target.value)));
+  };
+
+  // Get current students
+  const indexOfLastStudent = currentPage * studentsPerPage;
+  const indexOfFirstStudent = indexOfLastStudent - studentsPerPage;
+  const currentStudents = students.slice(indexOfFirstStudent, indexOfLastStudent);
+
+  // Function to get initials for avatar
+  const getInitials = (name: string) => {
+    if (!name) return "??";
+    const parts = name.split(" ");
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[1][0]}`;
+    }
+    return name.substring(0, 2);
+  };
+
+  // Custom pagination component
+  const CustomPagination = ({ totalPages, currentPage, onPageChange }: { totalPages: number, currentPage: number, onPageChange: (page: number) => void }) => {
+    const pages = [];
+    const maxPagesToShow = 5;
+    
+    let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+    let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+    
+    if (endPage - startPage + 1 < maxPagesToShow) {
+      startPage = Math.max(1, endPage - maxPagesToShow + 1);
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    
+    return (
+      <div className="flex items-center justify-center space-x-2">
+        <button 
+          onClick={() => onPageChange(1)} 
+          disabled={currentPage === 1}
+          className={`px-3 py-1 rounded text-sm ${currentPage === 1 
+            ? 'bg-gray-200 text-gray-500 cursor-not-allowed dark:bg-gray-700' 
+            : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600'}`}
+        >
+          First
+        </button>
+        <button 
+          onClick={() => onPageChange(currentPage - 1)} 
+          disabled={currentPage === 1}
+          className={`px-3 py-1 rounded text-sm ${currentPage === 1 
+            ? 'bg-gray-200 text-gray-500 cursor-not-allowed dark:bg-gray-700' 
+            : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600'}`}
+        >
+          Prev
+        </button>
+        
+        {pages.map(page => (
+          <button 
+            key={page} 
+            onClick={() => onPageChange(page)}
+            className={`px-3 py-1 rounded text-sm ${currentPage === page 
+              ? 'bg-orange-500 text-white' 
+              : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600'}`}
+          >
+            {page}
+          </button>
+        ))}
+        
+        <button 
+          onClick={() => onPageChange(currentPage + 1)} 
+          disabled={currentPage === totalPages}
+          className={`px-3 py-1 rounded text-sm ${currentPage === totalPages 
+            ? 'bg-gray-200 text-gray-500 cursor-not-allowed dark:bg-gray-700' 
+            : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600'}`}
+        >
+          Next
+        </button>
+        <button 
+          onClick={() => onPageChange(totalPages)} 
+          disabled={currentPage === totalPages}
+          className={`px-3 py-1 rounded text-sm ${currentPage === totalPages 
+            ? 'bg-gray-200 text-gray-500 cursor-not-allowed dark:bg-gray-700' 
+            : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600'}`}
+        >
+          Last
+        </button>
+      </div>
+    );
+  };
 
   return (
     <AuthGuard>
@@ -438,7 +488,7 @@ export default function HostelWarden() {
               ) : (
                 <>
                   <div className="relative">
-                    <div className="w-28 h-28 md:w-32 md:h-32 rounded-full overflow-hidden ring-4 ring-white dark:ring-slate-700 bg-white dark:bg-slate-700 shadow-md flex-shrink-0">
+                    <div className="w-28 h-28 md:w-32 md:h-32 rounded-full overflow-hidden ring-4 ring-white dark:ring-slate-700 bg-white dark:bg-slate-700 shadow-md shrink-0">
                       <Image
                         src={data?.warden?.profilePictureUrl || "/boy.png"}
                         width={150}
@@ -466,7 +516,7 @@ export default function HostelWarden() {
                         </h2>
                         <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-1">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-300">
-                            {data?.warden?.role?.replace('_', ' ') || "Hostel Warden"}
+                            {data?.warden?.role?.replace("_", " ") || "Hostel Warden"}
                           </span>
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300">
                             Hostel: {data?.hostel?.name || data?.warden?.assignedHostel || "Not Assigned"}
@@ -551,10 +601,13 @@ export default function HostelWarden() {
                       <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 rounded-lg shadow-sm">
                         <CircleDotDashed size={16} className="text-yellow-500" />
                         <span className="text-xs md:text-sm font-medium">
-                          {data?.issues?.filter(issue => !issue.solved)?.length || 0} Pending Issues
+                          {data?.issues?.filter((issue) => !issue.solved)?.length || 0} Pending Issues
                         </span>
                       </div>
-                      <Link href="/notice-board" className="flex items-center gap-2 px-3 py-1.5 bg-orange-500 text-white rounded-lg shadow-sm hover:bg-orange-600 transition-colors">
+                      <Link
+                        href="/notice-board"
+                        className="flex items-center gap-2 px-3 py-1.5 bg-orange-500 text-white rounded-lg shadow-sm hover:bg-orange-600 transition-colors"
+                      >
                         <span className="text-xs md:text-sm font-medium">
                           Maintenance Board
                         </span>
@@ -574,33 +627,33 @@ export default function HostelWarden() {
             <div className="flex space-x-6">
               <button
                 className={`py-3 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
-                  activeTab === 'issues'
-                    ? 'border-orange-500 text-orange-600 dark:text-orange-400'
-                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                  activeTab === "issues"
+                    ? "border-orange-500 text-orange-600 dark:text-orange-400"
+                    : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
                 }`}
-                onClick={() => setActiveTab('issues')}
+                onClick={() => setActiveTab("issues")}
               >
                 <Tool size={16} />
                 Issues & Maintenance
               </button>
               <button
                 className={`py-3 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
-                  activeTab === 'staff'
-                    ? 'border-orange-500 text-orange-600 dark:text-orange-400'
-                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                  activeTab === "staff"
+                    ? "border-orange-500 text-orange-600 dark:text-orange-400"
+                    : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
                 }`}
-                onClick={() => setActiveTab('staff')}
+                onClick={() => setActiveTab("staff")}
               >
                 <Shield size={16} />
                 Staff Members
               </button>
               <button
                 className={`py-3 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
-                  activeTab === 'students'
-                    ? 'border-orange-500 text-orange-600 dark:text-orange-400'
-                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                  activeTab === "students"
+                    ? "border-orange-500 text-orange-600 dark:text-orange-400"
+                    : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
                 }`}
-                onClick={() => setActiveTab('students')}
+                onClick={() => setActiveTab("students")}
               >
                 <GraduationCap size={16} />
                 Students
@@ -611,7 +664,10 @@ export default function HostelWarden() {
           {loading ? (
             <div className="space-y-6">
               {[...Array(3)].map((_, index) => (
-                <div key={index} className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-md animate-pulse">
+                <div
+                  key={index}
+                  className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-md animate-pulse"
+                >
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-gray-200 dark:bg-slate-700 rounded-lg"></div>
                     <div className="flex-1">
@@ -629,7 +685,7 @@ export default function HostelWarden() {
               ))}
             </div>
           ) : error ? (
-            <motion.div 
+            <motion.div
               className="bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200 p-4 rounded-lg"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -638,11 +694,11 @@ export default function HostelWarden() {
             </motion.div>
           ) : (
             <>
-              {activeTab === 'issues' && (
-                <>
-                  <IssueStatusFilter />
-                  
-                  {(!data?.issues || data.issues.length === 0) ? (
+                {activeTab === "issues" && (
+              <>
+                <IssueStatusFilter filterStatus={filterStatus} setFilterStatus={setFilterStatus} />
+
+                {!data?.issues || data.issues.length === 0 ? (
                     <motion.div
                       className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow text-center"
                       initial={{ opacity: 0, y: 20 }}
@@ -669,7 +725,7 @@ export default function HostelWarden() {
                           No issues found
                         </h3>
                         <p className="text-gray-500 dark:text-gray-400">
-                          There are currently no {filterStatus !== 'all' ? filterStatus : ''} issues for your hostel.
+                          There are currently no {filterStatus !== "all" ? filterStatus : ""} issues for your hostel.
                         </p>
                       </div>
                     </motion.div>
@@ -685,12 +741,14 @@ export default function HostelWarden() {
                         >
                           <div className="flex items-start gap-3">
                             <div
-                              className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 
-                              ${issue.type === 'maintenance'
-                                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                                : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'}`}
+                              className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 
+                              ${
+                                issue.type === "maintenance"
+                                  ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
+                                  : "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+                              }`}
                             >
-                              {issue.type === 'maintenance' ? (
+                              {issue.type === "maintenance" ? (
                                 <Settings className="w-5 h-5" />
                               ) : (
                                 <svg
@@ -721,20 +779,20 @@ export default function HostelWarden() {
                                   </div>
                                 </div>
                                 <div className="mt-2 sm:mt-0 flex items-center gap-2">
-                                  <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                    issue.solved
-                                      ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
-                                      : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300'
-                                  }`}>
-                                    {issue.solved ? 'Resolved' : 'Pending'}
+                                  <span
+                                    className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                      issue.solved
+                                        ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
+                                        : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300"
+                                    }`}
+                                  >
+                                    {issue.solved ? "Resolved" : "Pending"}
                                   </span>
                                 </div>
                               </div>
-                              
-                              <p className="mt-3 text-gray-600 dark:text-gray-300">
-                                {issue.message}
-                              </p>
-                              
+
+                              <p className="mt-3 text-gray-600 dark:text-gray-300">{issue.message}</p>
+
                               <div className="mt-4 pt-3 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 dark:border-slate-700">
                                 <div className="flex flex-wrap gap-2">
                                   {issue.hostel && (
@@ -755,7 +813,7 @@ export default function HostelWarden() {
                                       Room: {issue.studentRoom || issue.room}
                                     </div>
                                   )}
-                                  {issue.type === 'maintenance' && issue.category && (
+                                  {issue.type === "maintenance" && issue.category && (
                                     <div className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300">
                                       <Settings size={12} className="mr-1" />
                                       {issue.category}
@@ -764,12 +822,12 @@ export default function HostelWarden() {
                                 </div>
                                 <span
                                   className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${
-                                    issue.type === 'maintenance'
-                                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300'
-                                      : 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300'
+                                    issue.type === "maintenance"
+                                      ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300"
+                                      : "bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300"
                                   }`}
                                 >
-                                  {issue.type === 'maintenance' ? 'Maintenance' : 'Complaint'}
+                                  {issue.type === "maintenance" ? "Maintenance" : "Complaint"}
                                 </span>
                               </div>
                             </div>
@@ -781,7 +839,7 @@ export default function HostelWarden() {
                 </>
               )}
 
-              {activeTab === 'staff' && (
+              {activeTab === "staff" && (
                 <div className="space-y-8">
                   {/* Floor Wardens Section */}
                   <div>
@@ -793,7 +851,9 @@ export default function HostelWarden() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3 }}
                       >
-                        <p className="text-gray-500 dark:text-gray-400">No floor wardens assigned to this hostel.</p>
+                        <p className="text-gray-500 dark:text-gray-400">
+                          No floor wardens assigned to this hostel.
+                        </p>
                       </motion.div>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -805,9 +865,9 @@ export default function HostelWarden() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.3, delay: 0.05 * (index % 6) }}
                           >
-                            <div className="bg-gradient-to-r from-orange-500 to-amber-600 dark:from-orange-900 dark:to-amber-900 p-4">
+                            <div className="bg-linear-to-r from-orange-500 to-amber-600 dark:from-orange-900 dark:to-amber-900 p-4">
                               <div className="flex items-center gap-3">
-                                <div className="w-14 h-14 rounded-full overflow-hidden bg-white dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
+                                <div className="w-14 h-14 rounded-full overflow-hidden bg-white dark:bg-slate-800 flex items-center justify-center shrink-0">
                                   {staff.profilePictureUrl ? (
                                     <Image
                                       src={staff.profilePictureUrl}
@@ -821,12 +881,8 @@ export default function HostelWarden() {
                                   )}
                                 </div>
                                 <div>
-                                  <h3 className="text-lg font-bold text-white">
-                                    {staff.fullName}
-                                  </h3>
-                                  <span className="text-sm text-orange-100 mt-0.5 block">
-                                    Floor Warden
-                                  </span>
+                                  <h3 className="text-lg font-bold text-white">{staff.fullName}</h3>
+                                  <span className="text-sm text-orange-100 mt-0.5 block">Floor Warden</span>
                                 </div>
                               </div>
                             </div>
@@ -866,7 +922,9 @@ export default function HostelWarden() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3 }}
                       >
-                        <p className="text-gray-500 dark:text-gray-400">No floor attendants assigned to this hostel.</p>
+                        <p className="text-gray-500 dark:text-gray-400">
+                          No floor attendants assigned to this hostel.
+                        </p>
                       </motion.div>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -878,9 +936,9 @@ export default function HostelWarden() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.3, delay: 0.05 * (index % 6) }}
                           >
-                            <div className="bg-gradient-to-r from-teal-500 to-green-600 dark:from-teal-900 dark:to-green-900 p-4">
+                            <div className="bg-linear-to-r from-teal-500 to-green-600 dark:from-teal-900 dark:to-green-900 p-4">
                               <div className="flex items-center gap-3">
-                                <div className="w-14 h-14 rounded-full overflow-hidden bg-white dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
+                                <div className="w-14 h-14 rounded-full overflow-hidden bg-white dark:bg-slate-800 flex items-center justify-center shrink-0">
                                   {staff.profilePictureUrl ? (
                                     <Image
                                       src={staff.profilePictureUrl}
@@ -894,12 +952,8 @@ export default function HostelWarden() {
                                   )}
                                 </div>
                                 <div>
-                                  <h3 className="text-lg font-bold text-white">
-                                    {staff.fullName}
-                                  </h3>
-                                  <span className="text-sm text-teal-100 mt-0.5 block">
-                                    Floor Attendant
-                                  </span>
+                                  <h3 className="text-lg font-bold text-white">{staff.fullName}</h3>
+                                  <span className="text-sm text-teal-100 mt-0.5 block">Floor Attendant</span>
                                 </div>
                               </div>
                             </div>
@@ -931,82 +985,100 @@ export default function HostelWarden() {
                 </div>
               )}
 
-              {activeTab === 'students' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {(!students || students.length === 0) ? (
-                    <motion.div
-                      className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow text-center col-span-full"
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      <div className="flex flex-col items-center justify-center">
-                        <div className="w-20 h-20 mb-4 text-gray-300 dark:text-gray-600">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={1.5}
-                              d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-                            />
+              {activeTab === "students" && (
+                <div className="p-6">
+                  <h1 className="text-2xl font-bold mb-6">Hostel Students Management</h1>
+
+                  {/* Pagination Controls Top */}
+                  <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+                    <div className="flex flex-col sm:flex-row items-center gap-4">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Showing {indexOfFirstStudent + 1}-{Math.min(indexOfLastStudent, students.length)} of{" "}
+                        {students.length} students
+                      </p>
+                      <div className="relative">
+                        <select
+                          value={studentsPerPage}
+                          onChange={handleChangeItemsPerPage}
+                          className="bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-200 py-2 px-3 pr-8 rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                        >
+                          <option value={12}>12 per page</option>
+                          <option value={24}>24 per page</option>
+                          <option value={36}>36 per page</option>
+                          <option value={48}>48 per page</option>
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-200">
+                          <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                            <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
                           </svg>
                         </div>
-                        <h3 className="text-xl font-medium text-gray-700 dark:text-gray-200 mb-2">
-                          No student data available
-                        </h3>
-                        <p className="text-gray-500 dark:text-gray-400">
-                          There are no students assigned to your hostel.
-                        </p>
                       </div>
-                    </motion.div>
-                  ) : (
-                    students.map((student, index) => (
-                      <motion.div
-                        key={student.id}
-                        className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-md"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3, delay: 0.05 * (index % 9) }}
+                    </div>
+                    <CustomPagination 
+                      totalPages={totalPages} 
+                      currentPage={currentPage} 
+                      onPageChange={handlePageChange} 
+                    />
+                  </div>
+
+                  {/* Student Cards Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                    {currentStudents.map((student, index) => (
+                      <div
+                        key={student.registrationNumber || index}
+                        className="bg-white dark:bg-slate-800 rounded-xl shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-gray-100 dark:border-slate-700 overflow-hidden flex flex-col h-full"
                       >
-                        <div className="flex items-start gap-4">
-                          <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-100 dark:bg-slate-700">
-                            {student.profilePictureUrl ? (
-                              <Image
-                                src={student.profilePictureUrl}
-                                width={48}
-                                height={48}
-                                alt={student.name}
-                                className="object-cover w-full h-full"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-gray-400 dark:text-gray-500">
-                                <UserCircle size={24} />
-                              </div>
-                            )}
+                        <div className="p-4 flex flex-col items-center bg-gradient-to-r from-orange-500 to-orange-600 dark:from-orange-600 dark:to-orange-700 text-white">
+                          <div className="w-16 h-16 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center text-xl font-bold text-orange-500 mb-2">
+                            {getInitials(student.fullName)}
                           </div>
-                          <div className="flex-1">
-                            <h3 className="font-medium text-gray-800 dark:text-white">{student.name}</h3>
-                            <p className="text-sm text-blue-600 dark:text-blue-400">{student.course}</p>
-                            <div className="mt-2 space-y-1 text-sm text-gray-500 dark:text-gray-400">
-                              <div className="flex items-center gap-1">
-                                <Mail size={12} />
+                          <h2 className="font-semibold text-center">{student.fullName}</h2>
+                          <span className="inline-block px-2 py-0.5 bg-white/20 rounded-full text-xs mt-1">
+                            {student.course} - {student.year} Year
+                          </span>
+                        </div>
+                        <div className="border-t border-gray-100 dark:border-slate-700"></div>
+                        <div className="p-4 flex-1 flex flex-col justify-between space-y-2">
+                          <div className="space-y-2">
+                            <div className="flex items-center">
+                              <BadgePlus size={16} className="text-orange-500 mr-2" />
+                              <span className="text-sm text-gray-600 dark:text-gray-300">
+                                {student.registrationNumber}
+                              </span>
+                            </div>
+                            <div className="flex items-center">
+                              <Mail size={16} className="text-orange-500 mr-2" />
+                              <span className="text-sm text-gray-600 dark:text-gray-300 truncate">
                                 {student.email}
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Building2 size={12} />
-                                {student.hostel} · Room {student.room}
-                              </div>
+                              </span>
+                            </div>
+                            <div className="flex items-center">
+                              <HomeIcon size={16} className="text-orange-500 mr-2" />
+                              <span className="text-sm text-gray-600 dark:text-gray-300">
+                                Room {student.hostelDetails?.roomNumber || "N/A"}, Floor{" "}
+                                {student.hostelDetails?.floor || "N/A"}
+                              </span>
+                            </div>
+                            <div className="flex items-center">
+                              <CalendarClock size={16} className="text-orange-500 mr-2" />
+                              <span className="text-sm text-gray-600 dark:text-gray-300">
+                                Joined: {student.dateOfOccupancy}
+                              </span>
                             </div>
                           </div>
                         </div>
-                      </motion.div>
-                    ))
-                  )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Pagination Controls Bottom */}
+                  <div className="mt-8">
+                    <CustomPagination 
+                      totalPages={totalPages} 
+                      currentPage={currentPage} 
+                      onPageChange={handlePageChange} 
+                    />
+                  </div>
                 </div>
               )}
             </>
@@ -1071,7 +1143,7 @@ export default function HostelWarden() {
 const ProfileSkeleton = () => {
   return (
     <div className="flex flex-col md:flex-row items-center md:items-end gap-6 md:gap-10 w-full">
-      <div className="w-32 h-32 md:w-36 md:h-36 rounded-full bg-gray-200 dark:bg-slate-700 flex-shrink-0 animate-pulse"></div>
+      <div className="w-32 h-32 md:w-36 md:h-36 rounded-full bg-gray-200 dark:bg-slate-700 shrink-0 animate-pulse"></div>
       <div className="flex-1 w-full">
         <div className="flex flex-col md:flex-row justify-between items-center md:items-start w-full">
           <div className="space-y-3 text-center md:text-left">
@@ -1092,4 +1164,68 @@ const ProfileSkeleton = () => {
       </div>
     </div>
   );
+}
+
+const IssueStatusFilter = ({ 
+  filterStatus, 
+  setFilterStatus 
+}: { 
+  filterStatus: "all" | "pending" | "solved", 
+  setFilterStatus: (status: "all" | "pending" | "solved") => void 
+}) => (
+  <div className="flex flex-wrap gap-2 mb-6">
+    <button
+      onClick={() => setFilterStatus("all")}
+      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+        filterStatus === "all"
+          ? "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
+          : "bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600"
+      }`}
+    >
+      <Users size={16} />
+      All Issues
+    </button>
+    <button
+      onClick={() => setFilterStatus("pending")}
+      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+        filterStatus === "pending"
+          ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300"
+          : "bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600"
+      }`}
+    >
+      <CircleDotDashed size={16} />
+      Pending
+    </button>
+    <button
+      onClick={() => setFilterStatus("solved")}
+      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+        filterStatus === "solved"
+          ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+          : "bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600"
+      }`}
+    >
+      <CheckCheck size={16} />
+      Resolved
+    </button>
+  </div>
+);
+
+const formatDate = (timestamp: Date | string): string => {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffInDays === 0) {
+    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+    if (diffInHours === 0) {
+      return `${Math.floor((now.getTime() - date.getTime()) / (1000 * 60))} minutes ago`;
+    }
+    return `${diffInHours} hours ago`;
+  } else if (diffInDays === 1) {
+    return "Yesterday";
+  } else if (diffInDays < 7) {
+    return `${diffInDays} days ago`;
+  } else {
+    return date.toLocaleDateString();
+  }
 };

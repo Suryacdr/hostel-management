@@ -18,6 +18,13 @@ import {
   DoorOpen,
   Settings,
   UserCircle,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  Briefcase,
+  Calendar,
+  GraduationCap,
+  MapPin,
 } from "lucide-react";
 import Image from "next/image";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -26,16 +33,27 @@ import { signOut, updateProfile } from "firebase/auth";
 import { motion, AnimatePresence } from "framer-motion";
 import AuthGuard from "@/components/AuthGuard";
 import Link from "next/link";
+import studentsData from "@/util/students.json";
 
 interface StudentData {
-  id: string;
-  name: string;
+  fullName: string;
+  name?: string;
+  registrationNumber: number | string;
   email: string;
   course: string;
-  department: string;
-  room: string;
-  hostel: string;
-  profilePictureUrl?: string;
+  year: string;
+  dateOfOccupancy: string;
+  issues: any[];
+  profilePictureUrl: string;
+  age: number;
+  phoneNumber: number;
+  parentsDetails: any[];
+  hostelDetails?: {
+    hostelId?: string;
+    room_id?: string;
+    roomNumber?: string;
+    floor?: string;
+  };
 }
 
 interface Issue {
@@ -68,6 +86,7 @@ interface DashboardData {
   floors?: any[];
   students?: StudentData[];
   issues?: Issue[];
+  allStudents?: StudentData[];
 }
 
 export default function SupervisorDashboard() {
@@ -79,6 +98,10 @@ export default function SupervisorDashboard() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'solved'>('all');
   const [activeTab, setActiveTab] = useState<'issues' | 'students'>('issues');
   const menuRef = useRef<HTMLDivElement>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filteredStudents, setFilteredStudents] = useState<StudentData[]>([]);
+  const studentsPerPage = 9;
 
   const handleSignOut = () => {
     signOut(auth)
@@ -136,7 +159,6 @@ export default function SupervisorDashboard() {
 
       const token = await user.getIdToken(true);
 
-      // Fetch basic dashboard data
       const response = await fetch("/api/fetch", {
         method: "GET",
         headers: {
@@ -151,14 +173,12 @@ export default function SupervisorDashboard() {
 
       const dashboardData = await response.json();
 
-      // Fetch issues with appropriate filtering
       const issuesUrl = new URL("/api/issue/all-issues", window.location.origin);
-      
-      // Add status filter if needed
+
       if (filterStatus !== 'all') {
         issuesUrl.searchParams.append('status', filterStatus);
       }
-      
+
       const issuesResponse = await fetch(issuesUrl.toString(), {
         method: "GET",
         headers: {
@@ -173,14 +193,23 @@ export default function SupervisorDashboard() {
 
       const issuesData = await issuesResponse.json();
 
-      // Combine the data
+      const allStudentsArray = studentsData.map((student) => ({
+        id: student.registrationNumber.toString(),
+        ...student,
+        name: student.fullName,
+        room: student.hostelDetails?.roomNumber || "",
+        hostel: student.hostelDetails?.hostelId || "",
+      }));
+
       const combinedData: DashboardData = {
         ...dashboardData,
         issues: issuesData.maintenanceIssues || [],
-        students: dashboardData.students || []
+        students: dashboardData.students || [],
+        allStudents: allStudentsArray,
       };
 
       setData(combinedData);
+      setFilteredStudents(allStudentsArray);
       console.log("Dashboard data loaded for supervisor:", combinedData);
     } catch (err) {
       console.error("Error fetching data:", err);
@@ -206,7 +235,41 @@ export default function SupervisorDashboard() {
     fetchDashboardData();
   }, [filterStatus]);
 
-  // Format date for display
+  useEffect(() => {
+    if (!data?.allStudents) return;
+
+    const filtered = data.allStudents.filter(student => 
+      student.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.course?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.registrationNumber?.toString().includes(searchTerm)
+    );
+
+    setFilteredStudents(filtered);
+    setCurrentPage(1);
+  }, [searchTerm, data?.allStudents]);
+
+  const indexOfLastStudent = currentPage * studentsPerPage;
+  const indexOfFirstStudent = indexOfLastStudent - studentsPerPage;
+  const currentStudents = filteredStudents.slice(indexOfFirstStudent, indexOfLastStudent);
+  const totalPages = Math.ceil(filteredStudents.length / studentsPerPage);
+
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const goToPreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const goToPage = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
+  };
+
   const formatDate = (timestamp: Date | string): string => {
     const date = new Date(timestamp);
     const now = new Date();
@@ -227,7 +290,6 @@ export default function SupervisorDashboard() {
     }
   };
 
-  // Issue Status Filter Component
   const IssueStatusFilter = () => (
     <div className="flex flex-wrap gap-2 mb-6">
       <button
@@ -269,10 +331,8 @@ export default function SupervisorDashboard() {
   return (
     <AuthGuard>
       <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-slate-900 dark:text-white">
-        {/* Header with profile info */}
         <div className="bg-white dark:bg-slate-800 shadow-md mb-6">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-            {/* Mobile menu controls */}
             <div className="flex md:hidden absolute top-4 right-4 z-10 items-center gap-2">
               <ThemeToggle />
               <button
@@ -311,14 +371,13 @@ export default function SupervisorDashboard() {
               </AnimatePresence>
             </div>
 
-            {/* Profile section */}
             <div className="py-6 md:py-8 flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-10">
               {loading ? (
                 <ProfileSkeleton />
               ) : (
                 <>
                   <div className="relative">
-                    <div className="w-28 h-28 md:w-32 md:h-32 rounded-full overflow-hidden ring-4 ring-white dark:ring-slate-700 bg-white dark:bg-slate-700 shadow-md flex-shrink-0">
+                    <div className="w-28 h-28 md:w-32 md:h-32 rounded-full overflow-hidden ring-4 ring-white dark:ring-slate-700 bg-white dark:bg-slate-700 shadow-md shrink-0">
                       <Image
                         src={data?.supervisor?.profilePictureUrl || "/boy.png"}
                         width={150}
@@ -364,7 +423,6 @@ export default function SupervisorDashboard() {
                         )}
                       </div>
 
-                      {/* Desktop menu controls */}
                       <div className="hidden md:flex items-center gap-3 relative">
                         <ThemeToggle />
                         <button
@@ -408,7 +466,6 @@ export default function SupervisorDashboard() {
                       </div>
                     </div>
 
-                    {/* Stats */}
                     <div className="flex flex-wrap justify-center md:justify-start gap-3 mt-4">
                       <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 rounded-lg shadow-sm">
                         <Building2 size={16} className="text-blue-500" />
@@ -441,9 +498,7 @@ export default function SupervisorDashboard() {
           </div>
         </div>
 
-        {/* Main content area */}
         <div className="flex-1 max-w-7xl mx-auto px-4 pb-8 w-full">
-          {/* Tab navigation */}
           <div className="mb-6 border-b border-gray-200 dark:border-slate-700">
             <div className="flex space-x-6">
               <button
@@ -546,7 +601,7 @@ export default function SupervisorDashboard() {
                         >
                           <div className="flex items-start gap-3">
                             <div
-                              className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 
+                              className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 
                               ${issue.type === 'maintenance'
                                 ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
                                 : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'}`}
@@ -643,10 +698,23 @@ export default function SupervisorDashboard() {
               )}
 
               {activeTab === 'students' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {(!data?.students || data.students.length === 0) ? (
+                <div className="space-y-6">
+                  <div className="relative">
+                    <div className="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
+                      <Search className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                    </div>
+                    <input
+                      type="search"
+                      className="block w-full p-3 ps-10 text-sm border rounded-lg bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 focus:ring-blue-500 focus:border-blue-500 dark:placeholder-gray-400"
+                      placeholder="Search students by name, email, course or ID..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                  
+                  {filteredStudents.length === 0 ? (
                     <motion.div
-                      className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow text-center col-span-full"
+                      className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow text-center"
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.3 }}
@@ -668,55 +736,204 @@ export default function SupervisorDashboard() {
                           </svg>
                         </div>
                         <h3 className="text-xl font-medium text-gray-700 dark:text-gray-200 mb-2">
-                          No student data available
+                          No students found
                         </h3>
                         <p className="text-gray-500 dark:text-gray-400">
-                          There are no students assigned to your hostel.
+                          {searchTerm ? "No students match your search criteria." : "There are no students in the system."}
                         </p>
                       </div>
                     </motion.div>
                   ) : (
-                    data.students.map((student, index) => (
-                      <motion.div
-                        key={student.id}
-                        className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-md"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3, delay: 0.05 * (index % 9) }}
-                      >
-                        <div className="flex items-start gap-4">
-                          <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-100 dark:bg-slate-700">
-                            {student.profilePictureUrl ? (
-                              <Image
-                                src={student.profilePictureUrl}
-                                width={48}
-                                height={48}
-                                alt={student.name}
-                                className="object-cover w-full h-full"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-gray-400 dark:text-gray-500">
-                                <UserCircle size={24} />
+                    <>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        Showing {indexOfFirstStudent + 1}-{Math.min(indexOfLastStudent, filteredStudents.length)} of {filteredStudents.length} students
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                        {currentStudents.map((student, index) => (
+                          <motion.div
+                            key={student.registrationNumber}
+                            className="bg-white dark:bg-slate-800 rounded-xl shadow-md overflow-hidden border border-gray-100 dark:border-slate-700 transition-all hover:shadow-lg"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3, delay: 0.05 * (index % 9) }}
+                          >
+                            <div className="p-1">
+                              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 p-4 rounded-t-lg">
+                                <div className="flex items-center gap-4">
+                                  <div className="w-16 h-16 rounded-full overflow-hidden bg-white dark:bg-slate-700 ring-2 ring-white dark:ring-slate-600 shadow">
+                                    {student.profilePictureUrl ? (
+                                      <Image
+                                        src={student.profilePictureUrl}
+                                        width={64}
+                                        height={64}
+                                        alt={student.name || student.fullName}
+                                        className="object-cover w-full h-full"
+                                      />
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center text-gray-400 dark:text-gray-500">
+                                        <GraduationCap size={28} />
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div>
+                                    <h3 className="font-semibold text-gray-800 dark:text-white text-lg">{student.name}</h3>
+                                    <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">
+                                      {student.registrationNumber && `#${student.registrationNumber}`}
+                                    </p>
+                                  </div>
+                                </div>
                               </div>
-                            )}
+                              
+                              <div className="p-5 space-y-4">
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                    <Mail className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                                    <span className="truncate">{student.email}</span>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                    <Briefcase className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                                    <span>{student.course || "Not specified"}</span>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                    <Building2 className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                                    <span>
+                                      {student.hostelDetails?.hostelId || "Not assigned"} •
+                                      Room {student.hostelDetails?.roomNumber || "N/A"}
+                                    </span>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                    <Calendar className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                                    <span>Year: {student.year}</span>
+                                  </div>
+                                </div>
+
+                                <div className="pt-3 border-t border-gray-100 dark:border-slate-700">
+                                  <div className="flex flex-wrap gap-2">
+                                    {student.hostelDetails?.floor && (
+                                      <span className="inline-block px-2 py-1 text-xs font-medium bg-gray-100 dark:bg-slate-700 rounded text-gray-700 dark:text-gray-300">
+                                        Floor: {student.hostelDetails.floor}
+                                      </span>
+                                    )}
+                                    <span className="inline-block px-2 py-1 text-xs font-medium bg-gray-100 dark:bg-slate-700 rounded text-gray-700 dark:text-gray-300">
+                                      Joined: {student.dateOfOccupancy}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                      
+                      {totalPages > 1 && (
+                        <div className="flex items-center justify-between border-t border-gray-200 dark:border-slate-700 pt-4 mt-4">
+                          <div className="flex-1 flex justify-between sm:hidden">
+                            <button
+                              onClick={goToPreviousPage}
+                              disabled={currentPage <= 1}
+                              className={`relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-slate-600 text-sm font-medium rounded-md ${
+                                currentPage <= 1
+                                  ? 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-gray-600'
+                                  : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-600'
+                              }`}
+                            >
+                              Previous
+                            </button>
+                            <button
+                              onClick={goToNextPage}
+                              disabled={currentPage >= totalPages}
+                              className={`relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-slate-600 text-sm font-medium rounded-md ${
+                                currentPage >= totalPages
+                                  ? 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-gray-600'
+                                  : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-600'
+                              }`}
+                            >
+                              Next
+                            </button>
                           </div>
-                          <div className="flex-1">
-                            <h3 className="font-medium text-gray-800 dark:text-white">{student.name}</h3>
-                            <p className="text-sm text-blue-600 dark:text-blue-400">{student.course}</p>
-                            <div className="mt-2 space-y-1 text-sm text-gray-500 dark:text-gray-400">
-                              <div className="flex items-center gap-1">
-                                <Mail size={12} />
-                                {student.email}
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Building2 size={12} />
-                                {student.hostel} · Room {student.room}
-                              </div>
+                          
+                          <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                            <div>
+                              <p className="text-sm text-gray-700 dark:text-gray-300">
+                                Showing <span className="font-medium">{indexOfFirstStudent + 1}</span> to{' '}
+                                <span className="font-medium">{Math.min(indexOfLastStudent, filteredStudents.length)}</span> of{' '}
+                                <span className="font-medium">{filteredStudents.length}</span> students
+                              </p>
+                            </div>
+                            
+                            <div>
+                              <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                                <button
+                                  onClick={goToPreviousPage}
+                                  disabled={currentPage <= 1}
+                                  className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm font-medium ${
+                                    currentPage <= 1
+                                      ? 'text-gray-300 dark:text-gray-600'
+                                      : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-600'
+                                  }`}
+                                >
+                                  <span className="sr-only">Previous</span>
+                                  <ChevronLeft className="h-5 w-5" />
+                                </button>
+                                
+                                {[...Array(totalPages)].map((_, index) => {
+                                  const pageNumber = index + 1;
+                                  if (
+                                    pageNumber === 1 ||
+                                    pageNumber === totalPages ||
+                                    (pageNumber >= currentPage - 1 && pageNumber <= currentPage + 1)
+                                  ) {
+                                    return (
+                                      <button
+                                        key={pageNumber}
+                                        onClick={() => goToPage(pageNumber)}
+                                        className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                                          pageNumber === currentPage
+                                            ? 'z-10 bg-blue-50 dark:bg-blue-900/30 border-blue-500 dark:border-blue-500 text-blue-600 dark:text-blue-400'
+                                            : 'bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-600'
+                                        }`}
+                                      >
+                                        {pageNumber}
+                                      </button>
+                                    );
+                                  } else if (
+                                    (pageNumber === currentPage - 2 && currentPage > 3) ||
+                                    (pageNumber === currentPage + 2 && currentPage < totalPages - 2)
+                                  ) {
+                                    return (
+                                      <span
+                                        key={pageNumber}
+                                        className="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm font-medium text-gray-700 dark:text-gray-300"
+                                      >
+                                        ...
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })}
+                                
+                                <button
+                                  onClick={goToNextPage}
+                                  disabled={currentPage >= totalPages}
+                                  className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm font-medium ${
+                                    currentPage >= totalPages
+                                      ? 'text-gray-300 dark:text-gray-600'
+                                      : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-600'
+                                  }`}
+                                >
+                                  <span className="sr-only">Next</span>
+                                  <ChevronRight className="h-5 w-5" />
+                                </button>
+                              </nav>
                             </div>
                           </div>
                         </div>
-                      </motion.div>
-                    ))
+                      )}
+                    </>
                   )}
                 </div>
               )}
@@ -724,7 +941,6 @@ export default function SupervisorDashboard() {
           )}
         </div>
 
-        {/* Profile edit modal */}
         <AnimatePresence>
           {isModalOpen && (
             <motion.div
@@ -782,7 +998,7 @@ export default function SupervisorDashboard() {
 const ProfileSkeleton = () => {
   return (
     <div className="flex flex-col md:flex-row items-center md:items-end gap-6 md:gap-10 w-full">
-      <div className="w-32 h-32 md:w-36 md:h-36 rounded-full bg-gray-200 dark:bg-slate-700 flex-shrink-0 animate-pulse"></div>
+      <div className="w-32 h-32 md:w-36 md:h-36 rounded-full bg-gray-200 dark:bg-slate-700 shrink-0 animate-pulse"></div>
       <div className="flex-1 w-full">
         <div className="flex flex-col md:flex-row justify-between items-center md:items-start w-full">
           <div className="space-y-3 text-center md:text-left">

@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
-import { Poppins } from "next/font/google";
+import { Montserrat } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/hooks/ThemeProvider";
 
-const Pop = Poppins({
-  weight: ["400", "500", "600", "700"],
+const mont = Montserrat({
+  weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
+  style: ["normal"],
   display: "swap",
   subsets: ["latin"],
 });
@@ -21,8 +22,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${Pop.className} antialiased`}>
-          <ThemeProvider>{children}</ThemeProvider>
+      <body className={`${mont.className} antialiased`}>
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );

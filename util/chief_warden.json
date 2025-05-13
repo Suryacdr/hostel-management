@@ -1,0 +1,11 @@
+[
+  {
+    "fullName": "Dr. Amit Kumar Roy",
+    "email": "amit.kumar@university.edu.in",
+    "profilePictureUrl": "",
+    "phoneNumber": [""],
+    "role": "chief_warden",
+    "assignedHostel": ["BH-1", "BH-2"],
+    "reportsTo": ""
+  }
+]

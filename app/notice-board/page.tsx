@@ -211,7 +211,7 @@ export default function NoticeBoard() {
   const LoginBanner = () => (
     <div className="bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-700 rounded-lg p-4 mb-6">
       <div className="flex items-center gap-3">
-        <div className="flex-shrink-0 bg-indigo-100 dark:bg-indigo-800 p-2 rounded-full">
+        <div className="shrink-0 bg-indigo-100 dark:bg-indigo-800 p-2 rounded-full">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-indigo-600 dark:text-indigo-300" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
           </svg>
@@ -220,7 +220,7 @@ export default function NoticeBoard() {
           <p className="text-indigo-700 dark:text-indigo-300 font-medium">You're viewing in guest mode</p>
           <p className="text-indigo-600/80 dark:text-indigo-400/80 text-sm">Login to submit maintenance requests and track your issues</p>
         </div>
-        <Link href="/login" className="flex-shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+        <Link href="/login" className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
           Login
         </Link>
       </div>
@@ -340,7 +340,7 @@ export default function NoticeBoard() {
                 transition={{ duration: 0.3, delay: 0.05 * (index % 10) }}
               >
                 <div className="flex items-start gap-4">
-                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 
+                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center shrink-0 
                     ${issue.solved 
                       ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
                       : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'}`}

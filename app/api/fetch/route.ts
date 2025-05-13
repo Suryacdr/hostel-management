@@ -44,7 +44,7 @@ type Floor = {
     number?: string | number;
     hostelId?: string;
     name?: string;
-    [key: string]: any; // For other properties that might exist on floor documents
+    [key: string]: any;
 };
 
 type Student = {
@@ -57,7 +57,7 @@ type Student = {
     year?: string;
     dateOfOccupancy?: string;
     pictureProfileUrl?: string;
-    profilePictureUrl?: string; // For backward compatibility
+    profilePictureUrl?: string;
     age?: number;
     phoneNumber?: number;
     hostelDetails?: {

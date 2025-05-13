@@ -65,6 +65,7 @@ interface StudentData {
     roomNumber: string;
     room_id: string;
   };
+  roomBucket?: string[]; // Add new property for room images
 }
 
 // Memoized Post Form Component - Fix hostel property
@@ -507,78 +508,127 @@ export default function StudentDashboard() {
       console.log("Student data received:", data.student);
       setStudentData(data.student);
 
-      // Fetch all student's issues using the new dedicated endpoint
-      const issuesResponse = await fetch("/api/issue/all-issues", {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
+      // Improved debugging for issues API call
+      console.log("About to fetch student issues...");
+      
+      try {
+        // Ensure we have the correct API endpoint
+        const issuesEndpoint = "/api/issue/all-issues";
+        console.log("Fetching issues from:", issuesEndpoint);
+        
+        const issuesResponse = await fetch(issuesEndpoint, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
+        
+        console.log("Issues API response status:", issuesResponse.status);
+        
+        // Handle non-OK responses with better error information
+        if (!issuesResponse.ok) {
+          const errorText = await issuesResponse.text();
+          console.error("Error fetching issues - Status:", issuesResponse.status);
+          console.error("Error fetching issues - Response:", errorText);
+          
+          // Try to parse as JSON if possible for better error message
+          let errorMessage = `Failed to fetch issues data: ${issuesResponse.status}`;
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.error || errorMessage;
+            console.error("Parsed error data:", errorData);
+          } catch (e) {
+            console.error("Could not parse error response as JSON");
+          }
+          
+          // Don't throw error - we'll continue with empty issues instead
+          console.warn(errorMessage);
+          setPosts([]); // Set empty posts rather than crashing
+        } else {
+          // Process successful response
+          const responseText = await issuesResponse.text();
+          console.log("Response received, length:", responseText.length);
+          
+          // Handle empty response
+          if (!responseText || responseText.trim() === '') {
+            console.log("Response is empty, setting empty issues array");
+            setPosts([]);
+            return;
+          }
+          
+          try {
+            const issuesData = JSON.parse(responseText);
+            console.log("Issues data parsed successfully");
+            
+            // Check if we have the expected structure
+            const allIssues = issuesData.maintenanceIssues || issuesData.issues || [];
+            console.log("Issues found:", allIssues.length);
+            
+            const formattedPosts = allIssues.map((issue: any) => {
+              const hostelId =
+                issue.hostelId ||
+                data.student?.hostel ||
+                data.student?.hostelDetails?.hostelId ||
+                data.student?.room?.split("-")[0] ||
+                "";
+              const floor =
+                issue.floor ||
+                data.student?.floor ||
+                data.student?.hostelDetails?.floor ||
+                "";
+              const roomNumber =
+                issue.room ||
+                issue.roomNumber ||
+                issue.studentRoom ||
+                data.student?.hostelDetails?.roomNumber ||
+                data.student?.room ||
+                "";
+              const room_id =
+                issue.room_id ||
+                data.student?.hostelDetails?.room_id ||
+                data.student?.room ||
+                "";
 
-      if (!issuesResponse.ok) {
-        console.error("Error fetching issues:", await issuesResponse.text());
-        throw new Error("Failed to fetch issues data");
+              const hostelDetails = {
+                hostelId,
+                floor,
+                roomNumber,
+                room_id,
+              };
+
+              return {
+                id: issue.id,
+                content: issue.message,
+                type: normalizePostType(issue.type),
+                timestamp: new Date(issue.timestamp),
+                author: data.student?.name || "You",
+                likes: issue.likes || 0,
+                solved: issue.solved || issue.isSolved || false,
+                completeDate: issue.completeDate || null,
+                hostelDetails,
+                category: issue.category,
+              };
+            });
+
+            // Sort posts by timestamp (newest first)
+            formattedPosts.sort(
+              (a: Post, b: Post) => b.timestamp.getTime() - a.timestamp.getTime()
+            );
+
+            setPosts(formattedPosts);
+            console.log("Posts loaded:", formattedPosts.length);
+          } catch (parseError) {
+            console.error("Error parsing issues data:", parseError);
+            // Continue with empty issues rather than crashing
+            setPosts([]);
+          }
+        }
+      } catch (fetchError) {
+        console.error("Exception during issues fetch:", fetchError);
+        // Continue with empty issues rather than crashing
+        setPosts([]);
       }
-
-      const issuesData = await issuesResponse.json();
-      const allIssues = issuesData.maintenanceIssues || [];
-
-      // Format the issues for display
-      const formattedPosts = allIssues.map((issue: any) => {
-        // Prefer issue.hostelId, issue.floor, etc. if available, else fallback to studentData
-        const hostelId =
-          issue.hostelId ||
-          data.student?.hostel ||
-          data.student?.hostelDetails?.hostelId ||
-          data.student?.room?.split("-")[0] ||
-          "";
-        const floor =
-          issue.floor ||
-          data.student?.floor ||
-          data.student?.hostelDetails?.floor ||
-          "";
-        const roomNumber =
-          issue.room ||
-          issue.roomNumber ||
-          issue.studentRoom ||
-          data.student?.hostelDetails?.roomNumber ||
-          data.student?.room ||
-          "";
-        const room_id =
-          issue.room_id ||
-          data.student?.hostelDetails?.room_id ||
-          data.student?.room ||
-          "";
-
-        const hostelDetails = {
-          hostelId,
-          floor,
-          roomNumber,
-          room_id,
-        };
-
-        return {
-          id: issue.id,
-          content: issue.message,
-          type: normalizePostType(issue.type),
-          timestamp: new Date(issue.timestamp),
-          author: data.student?.name || "You",
-          likes: issue.likes || 0,
-          solved: issue.solved || issue.isSolved || false,
-          completeDate: issue.completeDate || null,
-          hostelDetails,
-          category: issue.category,
-        };
-      });
-
-      // Sort posts by timestamp (newest first)
-      formattedPosts.sort(
-        (a: Post, b: Post) => b.timestamp.getTime() - a.timestamp.getTime()
-      );
-
-      setPosts(formattedPosts);
-      console.log("Posts loaded:", formattedPosts.length);
     } catch (error) {
       console.error("Error fetching student data:", error);
     } finally {
@@ -862,7 +912,7 @@ export default function StudentDashboard() {
               ) : (
                 <>
                   <div className="relative">
-                    <div className="w-28 h-28 md:w-32 md:h-32 rounded-full overflow-hidden ring-4 ring-white dark:ring-slate-700 bg-white dark:bg-slate-700 shadow-md flex-shrink-0">
+                    <div className="w-28 h-28 md:w-32 md:h-32 rounded-full overflow-hidden ring-4 ring-white dark:ring-slate-700 bg-white dark:bg-slate-700 shadow-md shrink-0">
                       <Image
                         src={studentData?.profilePictureUrl || "/boy.png"}
                         width={150}
@@ -1001,7 +1051,7 @@ export default function StudentDashboard() {
                       : "text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
                   }`}
                 >
-                  Feed
+                  All Feed
                   {activeTab === "feed" && (
                     <motion.div
                       className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500"
@@ -1173,7 +1223,7 @@ export default function StudentDashboard() {
                       </button>
                       <button
                         type="submit"
-                        className="w-full sm:w-auto px-6 py-3 text-sm font-medium text-white bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg hover:from-indigo-600 hover:to-purple-700 transition-colors"
+                        className="w-full sm:w-auto px-6 py-3 text-sm font-medium text-white bg-linear-to-r from-indigo-500 to-purple-600 rounded-lg hover:from-indigo-600 hover:to-purple-700 transition-colors"
                       >
                         {isLoading ? (
                           <span className="flex items-center justify-center">
@@ -1194,8 +1244,7 @@ export default function StudentDashboard() {
                               <path
                                 className="opacity-75"
                                 fill="currentColor"
-                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                              ></path>
+                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
                             Saving...
                           </span>
@@ -1218,7 +1267,7 @@ export default function StudentDashboard() {
 const ProfileSkeleton = () => {
   return (
     <div className="flex flex-col md:flex-row items-center md:items-end gap-6 md:gap-10 w-full">
-      <div className="w-32 h-32 md:w-36 md:h-36 rounded-full bg-gray-200 dark:bg-slate-700 flex-shrink-0 animate-pulse"></div>
+      <div className="w-32 h-32 md:w-36 md:h-36 rounded-full bg-gray-200 dark:bg-slate-700 shrink-0 animate-pulse"></div>
       <div className="flex-1 w-full">
         <div className="flex flex-col md:flex-row justify-between items-center md:items-start w-full">
           <div className="space-y-3 text-center md:text-left">
@@ -1363,7 +1412,7 @@ const MessageBox: React.FC<
   return (
     <div className="bg-white dark:bg-slate-800 p-4 md:p-5 rounded-xl shadow-md hover:shadow-lg transition-shadow">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 md:w-12 md:h-12 rounded-full overflow-hidden flex-shrink-0 ring-1 ring-gray-100 dark:ring-slate-700">
+        <div className="w-10 h-10 md:w-12 md:h-12 rounded-full overflow-hidden shrink-0 ring-1 ring-gray-100 dark:ring-slate-700">
           <Image
             src={studentData?.profilePictureUrl || "/boy.png"}
             width={50}
@@ -1532,11 +1581,211 @@ const MessageBox: React.FC<
   );
 };
 
-// Room Photo Tab Component
 const RoomPhotoTab = React.memo(
   ({ studentData }: { studentData: StudentData | null }) => {
     const hostelNumber = studentData?.hostelDetails?.hostelId || "";
     const roomNumber = studentData?.hostelDetails?.roomNumber || "";
+    const floorNumber = studentData?.hostelDetails?.floor || "";
+    const roomId = studentData?.hostelDetails?.room_id || "";
+    const [isUploading, setIsUploading] = React.useState(false);
+    const [uploadError, setUploadError] = React.useState<string | null>(null);
+    const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
+    const [newImageFile, setNewImageFile] = React.useState<File | null>(null);
+    const [newImagePreview, setNewImagePreview] = React.useState<string | null>(null);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
+    const [roomImages, setRoomImages] = React.useState<string[]>([]);
+    const [isLoadingImage, setIsLoadingImage] = React.useState(true);
+    const [selectedImage, setSelectedImage] = React.useState<string | null>(null);
+    
+    // Fetch room images on component mount
+    React.useEffect(() => {
+      const fetchRoomImages = async () => {
+        if (!roomId) {
+          setIsLoadingImage(false);
+          return;
+        }
+
+        try {
+          // First check if we already have images in studentData
+          if (studentData?.roomBucket && studentData.roomBucket.length > 0) {
+            console.log("Using room images from student data:", studentData.roomBucket);
+            setRoomImages(studentData.roomBucket);
+            if (studentData.roomBucket.length > 0) {
+              setSelectedImage(studentData.roomBucket[0]);
+            }
+            setIsLoadingImage(false);
+            return;
+          }
+
+          const user = auth.currentUser;
+          if (!user) {
+            setIsLoadingImage(false);
+            return;
+          }
+
+          const token = await user.getIdToken();
+          
+          // Fetch room images from API
+          const response = await fetch(`/api/room-images?roomId=${roomId}`, {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.images && Array.isArray(data.images)) {
+              console.log("Retrieved room images:", data.images);
+              setRoomImages(data.images);
+              if (data.images.length > 0) {
+                setSelectedImage(data.images[0]);
+              }
+            } else {
+              console.log("No room images available or invalid format");
+              setRoomImages([]);
+            }
+          } else {
+            console.log("Failed to fetch room images, status:", response.status);
+            setRoomImages([]);
+          }
+        } catch (error) {
+          console.error("Error fetching room images:", error);
+          setRoomImages([]);
+        } finally {
+          setIsLoadingImage(false);
+        }
+      };
+
+      fetchRoomImages();
+    }, [roomId, studentData]);
+
+    // Handle file selection
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        // Reset states
+        setUploadError(null);
+        setSuccessMessage(null);
+        setNewImageFile(file);
+        
+        // Create preview URL
+        const reader = new FileReader();
+        reader.onload = () => {
+          setNewImagePreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+
+    // Handle file selection button click
+    const handleSelectFile = () => {
+      fileInputRef.current?.click();
+    };
+
+    // Handle image upload
+    const handleUploadImage = async () => {
+      if (!newImageFile || !studentData?.hostelDetails) {
+        setUploadError("No image selected or room information missing");
+        return;
+      }
+
+      setIsUploading(true);
+      setUploadError(null);
+      setSuccessMessage(null);
+
+      try {
+        const user = auth.currentUser;
+        if (!user) {
+          throw new Error("User not logged in");
+        }
+
+        // Get authentication token
+        const token = await user.getIdToken();
+
+        // Create a FormData object instead of using base64
+        const formData = new FormData();
+        formData.append("image", newImageFile);
+        formData.append("roomId", roomId);
+        formData.append("hostelId", hostelNumber);
+        formData.append("floorNumber", floorNumber);
+
+        // Send upload request to API using FormData
+        const response = await fetch("/api/upload", {
+          method: "POST",
+          headers: {
+            // Don't set Content-Type for FormData
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to upload image");
+        }
+
+        const result = await response.json();
+        console.log("Upload successful:", result);
+
+        // Add new image URL to the room images array
+        if (result.imageUrl) {
+          // Update local state
+          const newRoomImages = [...roomImages, result.imageUrl];
+          setRoomImages(newRoomImages);
+          setSelectedImage(result.imageUrl);
+          
+          // Also update in Firestore
+          const updateResponse = await fetch("/api/update-room-images", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              roomId,
+              images: newRoomImages
+            }),
+          });
+          
+          if (!updateResponse.ok) {
+            console.warn("Failed to update room image list in database");
+          } else {
+            console.log("Room image list updated in database");
+          }
+        }
+
+        // Show success message
+        setSuccessMessage("Room image uploaded successfully!");
+        
+        // Clear file selection
+        setNewImageFile(null);
+        setNewImagePreview(null);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+      } catch (error) {
+        console.error("Image upload error:", error);
+        setUploadError(error instanceof Error ? error.message : "Failed to upload image");
+      } finally {
+        setIsUploading(false);
+      }
+    };
+
+    // Handle cancel upload
+    const handleCancelUpload = () => {
+      setNewImageFile(null);
+      setNewImagePreview(null);
+      setUploadError(null);
+      setSuccessMessage(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    };
+
+    // Handle thumbnail click
+    const handleSelectImage = (imageUrl: string) => {
+      setSelectedImage(imageUrl);
+    };
 
     return (
       <motion.div
@@ -1545,39 +1794,161 @@ const RoomPhotoTab = React.memo(
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2 }}
       >
-        <div className="flex flex-col space-y-4">
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-white flex items-center gap-2">
-            <Camera size={20} className="text-indigo-500" />
-            Room Photo: {roomNumber}
-          </h2>
-
-          <div className="relative w-full h-[300px] sm:h-[400px] md:h-[500px] overflow-hidden rounded-lg">
-            <Image
-              src="/room-placeholder.jpeg"
-              alt={`Room ${roomNumber} photo`}
-              fill
-              className="object-cover"
+        <div className="flex flex-col space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+              <Camera size={20} className="text-indigo-500" />
+              Room Photos: {roomNumber}
+            </h2>
+            
+            {/* Image upload button */}
+            <button
+              onClick={handleSelectFile}
+              disabled={isUploading}
+              className="flex items-center gap-1 py-2 px-3 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg text-sm hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors"
+            >
+              <Camera size={16} />
+              Upload New Photo
+            </button>
+            
+            {/* Hidden file input */}
+            <input 
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
             />
-            <div className="absolute bottom-4 right-4 bg-black/70 px-3 py-1.5 rounded-lg text-white text-sm">
-              Hostel {hostelNumber}, Room {roomNumber}
-            </div>
           </div>
 
-          <div className="bg-gray-50 dark:bg-slate-700/30 rounded-lg p-4 text-sm text-gray-600 dark:text-gray-300">
-            <p className="mb-2">
-              This is a placeholder room photo. In the actual implementation,
-              this could:
-            </p>
-            <ul className="list-disc pl-5 space-y-1">
-              <li>
-                Display the most recent image of your room from inspections
-              </li>
-              <li>
-                Allow you to upload your own photos for maintenance requests
-              </li>
-              <li>Show historical room condition for documentation</li>
-            </ul>
-          </div>
+          {/* Upload preview section */}
+          {newImagePreview && (
+            <div className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-slate-700/30">
+              <div className="flex flex-col space-y-4">
+                <div className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                  <Camera size={16} className="text-indigo-500" />
+                  New room photo preview
+                </div>
+                
+                <div className="relative w-full h-64 overflow-hidden rounded-lg">
+                  <Image
+                    src={newImagePreview}
+                    alt="Room photo preview"
+                    fill
+                    className="object-contain"
+                  />
+                </div>
+                
+                {/* Error message */}
+                {uploadError && (
+                  <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-3 rounded-md text-sm">
+                    {uploadError}
+                  </div>
+                )}
+                
+                {/* Success message */}
+                {successMessage && (
+                  <div className="bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 p-3 rounded-md text-sm">
+                    {successMessage}
+                  </div>
+                )}
+                
+                {/* Action buttons */}
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={handleCancelUpload}
+                    disabled={isUploading}
+                    className="py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleUploadImage}
+                    disabled={isUploading || !newImageFile}
+                    className={`py-2 px-4 rounded-md text-sm text-white flex items-center gap-2 ${
+                      isUploading ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-500 hover:bg-indigo-600'
+                    }`}
+                  >
+                    {isUploading ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Camera size={16} />
+                        Upload Photo
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Room image display section */}
+          {!newImagePreview && (
+            <>
+              {isLoadingImage ? (
+                // Loading state
+                <div className="w-full h-[300px] sm:h-[400px] bg-gray-100 dark:bg-slate-700 rounded-lg flex items-center justify-center animate-pulse">
+                  <svg className="w-10 h-10 text-gray-300 dark:text-gray-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+              ) : roomImages.length > 0 && selectedImage ? (
+                // Display the selected room image
+                <div className="space-y-4">
+                  <div className="relative w-full h-[300px] sm:h-[400px] md:h-[500px] overflow-hidden rounded-lg">
+                    <Image
+                      src={selectedImage}
+                      alt={`Room ${roomNumber} photo`}
+                      fill
+                      className="object-contain"
+                    />
+                    <div className="absolute bottom-4 right-4 bg-black/70 px-3 py-1.5 rounded-lg text-white text-sm">
+                      Hostel {hostelNumber}, Room {roomNumber}
+                    </div>
+                  </div>
+                  
+                  {/* Thumbnail gallery */}
+                  {roomImages.length > 1 && (
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                      {roomImages.map((image, index) => (
+                        <button
+                          key={index}
+                          onClick={() => handleSelectImage(image)}
+                          className={`relative aspect-square rounded-md overflow-hidden border-2 transition-all ${
+                            selectedImage === image 
+                              ? 'border-indigo-500 shadow-md' 
+                              : 'border-transparent hover:border-indigo-300'
+                          }`}
+                        >
+                          <Image
+                            src={image}
+                            alt={`Room thumbnail ${index + 1}`}
+                            fill
+                            className="object-cover"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                // No image uploaded yet
+                <div className="w-full h-[300px] sm:h-[400px] bg-gray-100 dark:bg-slate-700 rounded-lg flex flex-col items-center justify-center">
+                  <Camera size={48} className="text-gray-300 dark:text-gray-600 mb-4" />
+                  <p className="text-gray-500 dark:text-gray-400 text-center max-w-md px-4">
+                    No room photos available yet. Upload a photo of your room using the button above.
+                  </p>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </motion.div>
     );
@@ -1585,7 +1956,6 @@ const RoomPhotoTab = React.memo(
 );
 RoomPhotoTab.displayName = "RoomPhotoTab";
 
-// Roommate Tab Component
 const RoommateTab = React.memo(
   ({ studentData }: { studentData: StudentData | null }) => {
     const [roommates, setRoommates] = React.useState<StudentData[]>([]);
@@ -1731,7 +2101,7 @@ const RoommateTab = React.memo(
               className="flex flex-col sm:flex-row gap-5 border-b border-gray-100 dark:border-slate-700 pb-6 last:border-0 last:pb-0"
             >
               {/* Profile Image */}
-              <div className="flex-shrink-0 flex flex-col items-center">
+              <div className="shrink-0 flex flex-col items-center">
                 <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-full overflow-hidden ring-4 ring-white dark:ring-slate-700 bg-white dark:bg-slate-700 shadow-md">
                   <Image
                     src={roommate.profilePictureUrl || "/boy.png"}
@@ -1751,7 +2121,7 @@ const RoommateTab = React.memo(
 
                 <div className="space-y-3">
                   <div className="flex items-start gap-3 text-sm">
-                    <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                    <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center shrink-0">
                       <School
                         size={16}
                         className="text-indigo-600 dark:text-indigo-400"
@@ -1768,7 +2138,7 @@ const RoommateTab = React.memo(
                   </div>
 
                   <div className="flex items-start gap-3 text-sm">
-                    <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                    <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center shrink-0">
                       <Hash
                         className="text-green-600 dark:text-green-400"
                         size={16}
@@ -1785,7 +2155,7 @@ const RoommateTab = React.memo(
                   </div>
 
                   <div className="flex items-start gap-3 text-sm">
-                    <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                    <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center shrink-0">
                       <Mail
                         className="text-indigo-600 dark:text-indigo-400"
                         size={16}

@@ -64,15 +64,11 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        console.log("Processing image upload for user:", uid, "with role:", role);
-
         try {
             // Generate folder path and public ID based on role
             const userRecord = await admin.auth().getUser(uid);
             const userName = userRecord.displayName?.replace(/\s+/g, '_').toLowerCase() || uid;
             const folderPath = `hms/profiles/${role}/${userName}`;
-
-            console.log("Uploading to Cloudinary folder:", folderPath);
 
             // Upload image using our utility function
             const uploadResult = await uploadImageToCloudinary(
@@ -81,9 +77,7 @@ export async function POST(request: NextRequest) {
                 userName
             );
 
-            console.log("Cloudinary upload successful");
             const secureUrl = uploadResult.secure_url;
-            console.log("Image URL:", secureUrl);
 
             // Use Firebase Admin to update Firestore
             try {
@@ -144,14 +138,11 @@ export async function POST(request: NextRequest) {
 
                 // If UID is missing or mismatched, add it to the update
                 if (!userData.uid || userData.uid !== uid) {
-                    console.log(`Ensuring correct UID (${uid}) for user ${userId}`);
                     updateData.uid = uid;
                 }
 
                 // Update the document with the profile picture URL
                 await db.collection(userCollection).doc(userId).update(updateData);
-
-                console.log(`Profile updated in Firestore successfully for ${role} with ID:`, userId);
 
                 // Return success response
                 return NextResponse.json({

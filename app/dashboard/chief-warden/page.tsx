@@ -241,9 +241,9 @@ export default function ChiefWarden() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: 0.05 * (index % 6) }}
             >
-              <div className="bg-gradient-to-r from-purple-500 to-indigo-600 dark:from-purple-900 dark:to-indigo-900 p-4">
+              <div className="bg-linear-to-r from-purple-500 to-indigo-600 dark:from-purple-900 dark:to-indigo-900 p-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-14 h-14 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
+                  <div className="w-14 h-14 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center shrink-0">
                     <User className="w-7 h-7 text-indigo-600 dark:text-indigo-400" />
                   </div>
                   <div>
@@ -350,7 +350,7 @@ export default function ChiefWarden() {
               ) : (
                 <>
                   <div className="relative">
-                    <div className="w-28 h-28 md:w-32 md:h-32 rounded-full overflow-hidden ring-4 ring-white dark:ring-slate-700 bg-white dark:bg-slate-700 shadow-md flex-shrink-0">
+                    <div className="w-28 h-28 md:w-32 md:h-32 rounded-full overflow-hidden ring-4 ring-white dark:ring-slate-700 bg-white dark:bg-slate-700 shadow-md shrink-0">
                       <Image
                         src={profileData?.profilePictureUrl || "/boy.png"}
                         width={150}
@@ -529,7 +529,7 @@ export default function ChiefWarden() {
                         transition={{ duration: 0.3, delay: 0.05 * (index % 6) }}
                       >
                         <div className="flex items-start gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center flex-shrink-0">
+                          <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0">
                             <Building2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                           </div>
                           <div>
@@ -622,7 +622,7 @@ export default function ChiefWarden() {
                       <div className="p-5">
                         <div className="flex items-start gap-4">
                           <div
-                            className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 
+                            className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 
                               ${
                                 issue.type === "maintenance"
                                   ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
@@ -802,7 +802,7 @@ export default function ChiefWarden() {
 const ProfileSkeleton = () => {
   return (
     <div className="flex flex-col md:flex-row items-center md:items-end gap-6 md:gap-10 w-full">
-      <div className="w-32 h-32 md:w-36 md:h-36 rounded-full bg-gray-200 dark:bg-slate-700 flex-shrink-0 animate-pulse"></div>
+      <div className="w-32 h-32 md:w-36 md:h-36 rounded-full bg-gray-200 dark:bg-slate-700 shrink-0 animate-pulse"></div>
       <div className="flex-1 w-full">
         <div className="flex flex-col md:flex-row justify-between items-center md:items-start w-full">
           <div className="space-y-3 text-center md:text-left">
