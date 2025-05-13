@@ -7,7 +7,9 @@
         "phoneNumber": "+91-9876543210",
         "role": "chief_warden",
         "accessLevel": "all",
-        "profilePictureUrl": ""
+        "profilePictureUrl": "",
+        "assignedHostels": ["BH1", "BH2"],
+        "reportsTo": null
       },
       "CW002": {
         "fullName": "Mrs. Diya Kumari",
@@ -15,7 +17,9 @@
         "phoneNumber": "+91-9876543210",
         "role": "chief_warden",
         "accessLevel": "all",
-        "profilePictureUrl": ""
+        "profilePictureUrl": "",
+        "assignedHostels": ["GH3", "GH4"],
+        "reportsTo": null
       }
     },
     "supervisors": {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { auth } from "@/lib/firebase";
 import {
   User,
@@ -11,13 +11,20 @@ import {
   LogOut,
   Menu,
   X,
-  Search,
+  School,
+  Clock,
+  CircleDotDashed,
+  CheckCheck,
+  ArrowUp,
+  DoorOpen,
+  Settings,
 } from "lucide-react";
 import Image from "next/image";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import ProfileImageUploader from "@/components/ProfileImageUploader";
 import { signOut, updateProfile } from "firebase/auth";
-import SearchModal from "@/components/SearchModal";
+import { motion, AnimatePresence } from "framer-motion";
+import AuthGuard from "@/components/AuthGuard";
 
 interface StaffMember {
   fullName: string;
@@ -59,8 +66,8 @@ export default function ChiefWarden() {
   const [profileData, setProfileData] = useState<ChiefWardenProfile | null>(
     null
   );
-  const [menuRef, setMenuRef] = useState<HTMLDivElement | null>(null);
-  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"staffs" | "issues">("staffs");
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const handleSignOut = () => {
     signOut(auth)
@@ -101,7 +108,6 @@ export default function ChiefWarden() {
             : null
         );
 
-        // Force a refresh of the dashboard data
         fetchDashboardData();
       } catch (error) {
         console.error("Error updating profile picture:", error);
@@ -120,6 +126,7 @@ export default function ChiefWarden() {
       const token = await user.getIdToken(true);
       console.log("Fetching dashboard data with token...");
 
+      // Fetch basic dashboard data
       const response = await fetch("/api/fetch", {
         method: "GET",
         headers: {
@@ -135,20 +142,31 @@ export default function ChiefWarden() {
       }
 
       const dashboardData = await response.json();
-      console.log("Dashboard data received:", dashboardData);
 
-      // Ensure all expected arrays exist in the data
-      const processedData = {
+      // Fetch all issues using the new dedicated endpoint
+      const issuesResponse = await fetch("/api/issue/all-issues", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!issuesResponse.ok) {
+        console.error("Error fetching issues:", await issuesResponse.text());
+        throw new Error("Failed to fetch issues data");
+      }
+
+      const issuesData = await issuesResponse.json();
+
+      // Combine the data
+      const combinedData = {
         ...dashboardData,
-        hostels: dashboardData.hostels || [],
-        supervisors: dashboardData.supervisors || [],
-        hostel_wardens: dashboardData.hostel_wardens || [],
-        floor_wardens: dashboardData.floor_wardens || [],
-        floor_attendants: dashboardData.floor_attendants || [],
-        issues: dashboardData.issues || [],
+        issues: issuesData.maintenanceIssues || [],
       };
 
-      setData(processedData);
+      console.log("Dashboard data received:", combinedData);
+      setData(combinedData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
       console.error("Error fetching dashboard data:", err);
@@ -159,7 +177,7 @@ export default function ChiefWarden() {
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef && !menuRef.contains(event.target as Node)) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsMenuOpen(false);
       }
     };
@@ -167,19 +185,18 @@ export default function ChiefWarden() {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [menuRef]);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
       if (user) {
-        // Set initial profile data from auth user
         setProfileData({
           fullName: user.displayName || "",
           email: user.email || "",
           role: "Chief Warden",
           profilePictureUrl: user.photoURL || "",
           accessLevel: "all",
-          assignedHostels: ["All Hostels"],
+          assignedHostels: ["BH1", "BH2"],
         });
         fetchDashboardData();
       } else {
@@ -190,39 +207,24 @@ export default function ChiefWarden() {
     return () => unsubscribe();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        Loading...
-      </div>
-    );
-  }
-
-  if (error) {
-    return <div className="text-red-500 p-4">Error: {error}</div>;
-  }
-
-  const totalIssues = data?.issues?.length || 0;
-  const pendingIssues =
-    data?.issues?.filter((issue) => !issue.solved)?.length || 0;
-  const resolvedIssues = totalIssues - pendingIssues;
-
-  // Helper function to render staff cards
   const renderStaffCards = (
     staffMembers: StaffMember[] = [],
     title: string
   ) => {
-    console.log(`Rendering ${title}:`, staffMembers);
-
     if (!staffMembers || staffMembers.length === 0) {
       return (
         <div className="mb-8">
           <h2 className="text-2xl font-bold mb-4">{title}</h2>
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow text-center">
+          <motion.div
+            className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow text-center"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
             <p className="text-gray-500 dark:text-gray-400">
               No {title.toLowerCase()} found.
             </p>
-          </div>
+          </motion.div>
         </div>
       );
     }
@@ -231,30 +233,26 @@ export default function ChiefWarden() {
       <div className="mb-8">
         <h2 className="text-2xl font-bold mb-4">{title}</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {staffMembers.map((staff, index) => {
-            // Ensure we have the required fields, using fallbacks if needed
-            const fullName = staff.fullName || "Unknown";
-            const email = staff.email || "No email provided";
-            const phoneNumber = staff.phoneNumber || "No phone provided";
-            const role = staff.role || "Staff Member";
-            const assignedHostel = staff.assignedHostel;
-            const assignedFloors = staff.assignedFloors || [];
-            const reportsTo = staff.reportsTo || "";
-
-            return (
-              <div
-                key={index}
-                className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow"
-              >
-                <div className="flex items-start justify-between mb-4">
+          {staffMembers.map((staff, index) => (
+            <motion.div
+              key={index}
+              className="bg-white dark:bg-slate-800 rounded-xl overflow-hidden shadow hover:shadow-md transition-all duration-300 hover:-translate-y-1 border border-gray-100 dark:border-slate-700"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.05 * (index % 6) }}
+            >
+              <div className="bg-linear-to-r from-purple-500 to-indigo-600 dark:from-purple-900 dark:to-indigo-900 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-14 h-14 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center shrink-0">
+                    <User className="w-7 h-7 text-indigo-600 dark:text-indigo-400" />
+                  </div>
                   <div>
-                    <h3 className="text-xl font-semibold flex items-center gap-2">
-                      <User className="w-5 h-5" />
-                      {fullName}
+                    <h3 className="text-lg font-bold text-white">
+                      {staff.fullName}
                     </h3>
-                    <span className="text-sm text-gray-500 dark:text-gray-400 mt-1 block">
-                      {role
-                        ? role
+                    <span className="text-sm text-purple-100 mt-0.5 block">
+                      {staff.role
+                        ? staff.role
                             .split("_")
                             .map(
                               (word) =>
@@ -265,300 +263,564 @@ export default function ChiefWarden() {
                     </span>
                   </div>
                 </div>
-                <div className="space-y-2 text-sm">
-                  <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-                    <Mail className="w-4 h-4" />
-                    {email}
-                  </p>
-                  <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-                    <Phone className="w-4 h-4" />
-                    {phoneNumber}
-                  </p>
-                  {assignedHostel && (
-                    <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-                      <Building2 className="w-4 h-4" />
-                      Hostel: {assignedHostel}
-                    </p>
-                  )}
-                  {assignedFloors && assignedFloors.length > 0 && (
-                    <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-                      <Users className="w-4 h-4" />
-                      Floors: {assignedFloors.join(", ")}
-                    </p>
-                  )}
-                  {reportsTo && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                      Reports to: {reportsTo}
-                    </p>
-                  )}
-                </div>
               </div>
-            );
-          })}
+              <div className="p-4 space-y-3">
+                <p className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                  <Mail className="w-4 h-4 text-indigo-500" />
+                  <span className="text-sm">{staff.email}</span>
+                </p>
+                <p className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                  <Phone className="w-4 h-4 text-indigo-500" />
+                  <span className="text-sm">{staff.phoneNumber}</span>
+                </p>
+                {staff.assignedHostel && (
+                  <p className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                    <Building2 className="w-4 h-4 text-indigo-500" />
+                    <span className="text-sm">Hostel: {staff.assignedHostel}</span>
+                  </p>
+                )}
+                {staff.assignedFloors && staff.assignedFloors.length > 0 && (
+                  <p className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                    <Users className="w-4 h-4 text-indigo-500" />
+                    <span className="text-sm">Floors: {staff.assignedFloors.join(", ")}</span>
+                  </p>
+                )}
+                {staff.reportsTo && (
+                  <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                    <p className="text-sm flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
+                      <ArrowUp className="w-3.5 h-3.5" />
+                      Reports to: {staff.reportsTo}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          ))}
         </div>
       </div>
     );
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-slate-950 dark:text-white">
-      {/* Profile Header */}
-      <div className="bg-white dark:bg-slate-900 shadow-md rounded-b-3xl mb-6">
-        <div className="max-w-7xl mx-auto p-4 md:p-6 flex flex-col md:flex-row items-center md:items-start gap-4 md:gap-8">
-          <div className="w-28 h-28 md:w-40 md:h-40 rounded-full overflow-hidden ring-4 ring-gray-100 dark:ring-slate-800 flex-shrink-0">
-            <Image
-              src={profileData?.profilePictureUrl || "/boy.png"}
-              width={200}
-              height={200}
-              alt="Profile"
-              className="object-cover w-full h-full"
-            />
-          </div>
-          <div className="flex-1 w-full md:w-auto">
-            <div className="flex flex-col md:flex-row justify-between items-center md:items-start">
-              <div className="text-center md:text-left mb-3 md:mb-0">
-                <h2 className="text-2xl md:text-3xl font-bold">
-                  {profileData?.fullName || "Chief Warden"}
-                </h2>
-                <h3 className="text-lg md:text-xl text-gray-600 dark:text-gray-400">
-                  {profileData?.role}
-                </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
-                  {profileData?.email}
-                </p>
-              </div>
-              <div className="flex items-center gap-3 relative mt-2 md:mt-0">
-                <ThemeToggle />
-                <button
-                  onClick={() => setIsSearchModalOpen(true)}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors"
-                >
-                  <Search size={20} />
-                </button>
-                <button
-                  onClick={handleMenuOpen}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors"
-                >
-                  <Menu size={20} />
-                </button>
+    <AuthGuard>
+      <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-slate-900 dark:text-white">
+        <div className="bg-white dark:bg-slate-800 shadow-md mb-6">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+            <div className="flex md:hidden absolute top-4 right-4 z-10 items-center gap-2">
+              <ThemeToggle />
+              <button
+                onClick={handleMenuOpen}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full transition-colors"
+              >
+                <Menu size={20} />
+              </button>
+              <AnimatePresence>
                 {isMenuOpen && (
-                  <div
-                    ref={setMenuRef}
-                    className="w-[180px] p-2 absolute bg-white dark:bg-slate-800 top-12 right-0 rounded-xl shadow-lg border border-gray-100 dark:border-slate-700 flex flex-col gap-2 z-50"
+                  <motion.div
+                    ref={menuRef}
+                    className="w-[200px] py-2 absolute bg-white dark:bg-slate-800 top-12 right-0 rounded-lg shadow-lg border border-gray-100 dark:border-slate-700 flex flex-col gap-0.5 z-50"
+                    initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                    transition={{ duration: 0.15 }}
                   >
                     <button
-                      className="inline-flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg text-gray-700 dark:text-gray-200 transition-colors"
+                      className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-200 transition-colors"
                       onClick={handleOpenEditModal}
                     >
-                      <User size={18} />
+                      <User size={16} />
                       <span className="text-sm font-medium">Edit Profile</span>
                     </button>
+                    <div className="border-t border-gray-100 dark:border-slate-700 my-1"></div>
                     <button
                       onClick={handleSignOut}
-                      className="inline-flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg text-red-500 transition-colors"
+                      className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 dark:hover:bg-slate-700 text-red-500 transition-colors"
                     >
-                      <LogOut size={18} />
+                      <LogOut size={16} />
                       <span className="text-sm font-medium">Logout</span>
                     </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <div className="py-6 md:py-8 flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-10">
+              {loading ? (
+                <ProfileSkeleton />
+              ) : (
+                <>
+                  <div className="relative">
+                    <div className="w-28 h-28 md:w-32 md:h-32 rounded-full overflow-hidden ring-4 ring-white dark:ring-slate-700 bg-white dark:bg-slate-700 shadow-md shrink-0">
+                      <Image
+                        src={profileData?.profilePictureUrl || "/boy.png"}
+                        width={150}
+                        height={150}
+                        alt="Profile"
+                        className="object-cover w-full h-full"
+                      />
+                    </div>
+                    <button
+                      onClick={handleOpenEditModal}
+                      className="absolute bottom-1 right-1 bg-white dark:bg-slate-700 rounded-full p-1.5 shadow-sm hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors border border-gray-100 dark:border-slate-600"
+                    >
+                      <User
+                        size={14}
+                        className="text-gray-600 dark:text-gray-300"
+                      />
+                    </button>
                   </div>
+
+                  <div className="flex-1 w-full md:w-auto">
+                    <div className="flex flex-col md:flex-row justify-between items-center md:items-start">
+                      <div className="text-center md:text-left mb-4 md:mb-0">
+                        <h2 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-white">
+                          {profileData?.fullName || "Chief Warden"}
+                        </h2>
+                        <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-1">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300">
+                            {profileData?.role || "Chief Warden"}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 flex items-center justify-center md:justify-start gap-1.5">
+                          <Mail className="w-4 h-4" />
+                          {profileData?.email || ""}
+                        </p>
+                      </div>
+
+                      <div className="hidden md:flex items-center gap-3 relative">
+                        <ThemeToggle />
+                        <button
+                          onClick={handleMenuOpen}
+                          className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full transition-colors relative"
+                        >
+                          <Menu size={20} />
+                        </button>
+                        <AnimatePresence>
+                          {isMenuOpen && (
+                            <motion.div
+                              ref={menuRef}
+                              className="w-[200px] py-2 absolute bg-white dark:bg-slate-800 top-12 right-0 rounded-lg shadow-lg border border-gray-100 dark:border-slate-700 flex flex-col gap-0.5 z-50"
+                              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                              transition={{ duration: 0.15 }}
+                            >
+                              <button
+                                className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-200 transition-colors"
+                                onClick={handleOpenEditModal}
+                              >
+                                <User size={16} />
+                                <span className="text-sm font-medium">
+                                  Edit Profile
+                                </span>
+                              </button>
+                              <div className="border-t border-gray-100 dark:border-slate-700 my-1"></div>
+                              <button
+                                onClick={handleSignOut}
+                                className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 dark:hover:bg-slate-700 text-red-500 transition-colors"
+                              >
+                                <LogOut size={16} />
+                                <span className="text-sm font-medium">
+                                  Logout
+                                </span>
+                              </button>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap justify-center md:justify-start gap-3 mt-4">
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 rounded-lg shadow-sm">
+                        <Building2 size={16} className="text-purple-500" />
+                        <span className="text-xs md:text-sm font-medium">
+                          {data?.hostels?.length || 0} Hostels
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 rounded-lg shadow-sm">
+                        <CircleDotDashed
+                          size={16}
+                          className="text-yellow-500"
+                        />
+                        <span className="text-xs md:text-sm font-medium">
+                          {data?.issues?.filter((issue) => !issue.solved)
+                            ?.length || 0}{" "}
+                          Pending Issues
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 rounded-lg shadow-sm">
+                        <CheckCheck size={16} className="text-green-500" />
+                        <span className="text-xs md:text-sm font-medium">
+                          {(data?.issues?.length || 0) -
+                            (data?.issues?.filter((issue) => !issue.solved)
+                              ?.length || 0)}{" "}
+                          Resolved
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 max-w-7xl w-full mx-auto px-4 pb-8">
+          <div className="flex border-b border-gray-200 dark:border-slate-700 mb-6">
+            <button
+              className={`py-4 px-6 font-medium text-sm focus:outline-none relative ${
+                activeTab === "staffs"
+                  ? "text-purple-600 dark:text-purple-400"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+              onClick={() => setActiveTab("staffs")}
+            >
+              <span className="flex items-center gap-2">
+                <Users size={18} />
+                Staff Members
+              </span>
+              {activeTab === "staffs" && (
+                <motion.div
+                  layoutId="tab-indicator"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-600 dark:bg-purple-400"
+                  initial={false}
+                />
+              )}
+            </button>
+            <button
+              className={`py-4 px-6 font-medium text-sm focus:outline-none relative ${
+                activeTab === "issues"
+                  ? "text-purple-600 dark:text-purple-400"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+              onClick={() => setActiveTab("issues")}
+            >
+              <span className="flex items-center gap-2">
+                <CircleDotDashed size={18} />
+                Issues & Complaints
+              </span>
+              {activeTab === "issues" && (
+                <motion.div
+                  layoutId="tab-indicator"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-600 dark:bg-purple-400"
+                  initial={false}
+                />
+              )}
+            </button>
+          </div>
+
+          {activeTab === "staffs" && (
+            <>
+              {renderStaffCards(data?.supervisors, "Supervisors")}
+              {renderStaffCards(data?.hostel_wardens, "Hostel Wardens")}
+              {renderStaffCards(data?.floor_wardens, "Floor Wardens")}
+              {renderStaffCards(data?.floor_attendants, "Floor Attendants")}
+
+              <div className="mb-8">
+                <h2 className="text-2xl font-bold mb-4">Hostels Overview</h2>
+                {data?.hostels && data.hostels.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {data.hostels.map((hostel, index) => (
+                      <motion.div
+                        key={hostel.id}
+                        className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow hover:shadow-md transition-shadow"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: 0.05 * (index % 6) }}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0">
+                            <Building2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                          </div>
+                          <div>
+                            <h3 className="text-xl font-semibold text-gray-800 dark:text-white">
+                              {hostel.name}
+                            </h3>
+                          </div>
+                        </div>
+                        <div className="mt-4 space-y-2.5">
+                          <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                            <Building2 className="w-4 h-4 text-gray-400" />
+                            Total Floors: {hostel.totalFloors}
+                          </p>
+                          <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                            <Users className="w-4 h-4 text-gray-400" />
+                            Total Rooms: {hostel.totalRooms}
+                          </p>
+                          <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                            <User className="w-4 h-4 text-gray-400" />
+                            Warden: {hostel.warden}
+                          </p>
+                          <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                            <User className="w-4 h-4 text-gray-400" />
+                            Supervisor: {hostel.supervisor}
+                          </p>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                ) : (
+                  <motion.div
+                    className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow text-center"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <p className="text-gray-500 dark:text-gray-400">
+                      No hostels found.
+                    </p>
+                  </motion.div>
                 )}
               </div>
-            </div>
+            </>
+          )}
 
-            <div className="flex flex-wrap gap-2 md:gap-4 mt-4 md:mt-6">
-              <div className="bg-gray-100 dark:bg-slate-800 p-2 md:p-3 rounded-xl text-center flex-1 shadow-sm min-w-[100px]">
-                <p className="text-lg md:text-xl font-semibold">
-                  {data?.hostels?.length || 0}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Hostels
-                </p>
-              </div>
-              <div className="bg-gray-100 dark:bg-slate-800 p-2 md:p-3 rounded-xl text-center flex-1 shadow-sm min-w-[100px]">
-                <p className="text-lg md:text-xl font-semibold text-yellow-500">
-                  {pendingIssues}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Pending Issues
-                </p>
-              </div>
-              <div className="bg-gray-100 dark:bg-slate-800 p-2 md:p-3 rounded-xl text-center flex-1 shadow-sm min-w-[100px]">
-                <p className="text-lg md:text-xl font-semibold text-green-500">
-                  {resolvedIssues}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Resolved Issues
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+          {activeTab === "issues" && (
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold mb-4">Issues & Complaints</h2>
+              {data?.issues && data.issues.length > 0 ? (
+                <div className="space-y-4">
+                  {data.issues.map((issue: any, index) => (
+                    <motion.div
+                      key={issue.id || index}
+                      className="bg-white dark:bg-slate-800 rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-gray-100 dark:border-slate-700"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: 0.05 * (index % 5) }}
+                    >
+                      <div className={`px-5 py-3 border-l-4 ${
+                        issue.type === "maintenance"
+                          ? "bg-blue-50 dark:bg-blue-900/20 border-blue-500"
+                          : "bg-red-50 dark:bg-red-900/20 border-red-500"
+                      }`}>
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                              issue.type === "maintenance"
+                                ? "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300"
+                                : "bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300"
+                            }`}>
+                              {issue.type === "maintenance" ? "Maintenance" : "Complaint"}
+                            </span>
+                            <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
+                              <Clock size={12} className="mr-1" />
+                              {new Date(issue.timestamp).toLocaleDateString()}
+                            </div>
+                          </div>
+                          <span
+                            className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                              issue.solved
+                                ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
+                                : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300"
+                            }`}
+                          >
+                            {issue.solved ? "Resolved" : "Pending"}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="p-5">
+                        <div className="flex items-start gap-4">
+                          <div
+                            className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 
+                              ${
+                                issue.type === "maintenance"
+                                  ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
+                                  : "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+                              }`}
+                          >
+                            {issue.type === "maintenance" ? (
+                              <svg
+                                className="w-5 h-5"
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                                />
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                />
+                              </svg>
+                            ) : (
+                              <svg
+                                className="w-5 h-5"
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                                />
+                              </svg>
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-medium text-gray-800 dark:text-white text-base mb-1">
+                              {issue.studentName || "Student"}
+                            </h3>
+                            <p className="text-gray-700 dark:text-gray-300">
+                              {issue.message}
+                            </p>
 
-      {/* Main Content */}
-      <div className="flex-1 max-w-7xl w-full mx-auto px-4 pb-8">
-        {/* Staff Management Sections */}
-        {renderStaffCards(data?.supervisors, "Supervisors")}
-        {renderStaffCards(data?.hostel_wardens, "Hostel Wardens")}
-        {renderStaffCards(data?.floor_wardens, "Floor Wardens")}
-        {renderStaffCards(data?.floor_attendants, "Floor Attendants")}
+                            {issue.hostelDetails && (
+                              <div className="mt-3 flex flex-wrap gap-3 p-2.5 bg-gray-50 dark:bg-slate-700/30 rounded-lg">
+                                <span className="inline-flex items-center gap-1 bg-white dark:bg-slate-700 px-2 py-1 rounded-md text-sm">
+                                  <Building2 size={14} className="text-gray-500" />
+                                  {issue.hostelDetails.hostel}
+                                </span>
+                                <span className="inline-flex items-center gap-1 bg-white dark:bg-slate-700 px-2 py-1 rounded-md text-sm">
+                                  <ArrowUp size={14} className="text-gray-500" />
+                                  Floor {issue.hostelDetails.floor}
+                                </span>
+                                <span className="inline-flex items-center gap-1 bg-white dark:bg-slate-700 px-2 py-1 rounded-md text-sm">
+                                  <DoorOpen size={14} className="text-gray-500" />
+                                  Room {issue.hostelDetails.roomNumber}
+                                </span>
+                                {issue.type === "maintenance" && issue.category && (
+                                  <span className="inline-flex items-center gap-1 bg-white dark:bg-slate-700 px-2 py-1 rounded-md text-sm">
+                                    <Settings size={14} className="text-gray-500" />
+                                    {issue.category}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
 
-        {/* Hostels Overview */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold mb-4">Hostels Overview</h2>
-          {data?.hostels && data.hostels.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {data.hostels.map((hostel) => (
-                <div
-                  key={hostel.id}
-                  className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow"
+                        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700 flex justify-end">
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            ID: {issue.id ? String(issue.id).substring(0, 8) + "..." : "N/A"}
+                          </span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              ) : (
+                <motion.div
+                  className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow text-center"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
                 >
-                  <h3 className="text-xl font-semibold mb-4">{hostel.name}</h3>
-                  <div className="space-y-2">
-                    <p className="flex items-center gap-2">
-                      <Building2 className="w-4 h-4" />
-                      Total Floors: {hostel.totalFloors}
-                    </p>
-                    <p className="flex items-center gap-2">
-                      <Users className="w-4 h-4" />
-                      Total Rooms: {hostel.totalRooms}
-                    </p>
-                    <p className="flex items-center gap-2">
-                      <User className="w-4 h-4" />
-                      Warden: {hostel.warden}
-                    </p>
-                    <p className="flex items-center gap-2">
-                      <User className="w-4 h-4" />
-                      Supervisor: {hostel.supervisor}
+                  <div className="flex flex-col items-center justify-center">
+                    <div className="w-20 h-20 mb-4 text-gray-300 dark:text-gray-600">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.5}
+                          d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
+                        />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-medium text-gray-700 dark:text-gray-200 mb-2">
+                      No issues found
+                    </h3>
+                    <p className="text-gray-500 dark:text-gray-400">
+                      There are currently no reported issues or complaints.
                     </p>
                   </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow text-center">
-              <p className="text-gray-500 dark:text-gray-400">
-                No hostels found.
-              </p>
+                </motion.div>
+              )}
             </div>
           )}
         </div>
 
-        {/* Recent Issues */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold mb-4">Recent Issues</h2>
-          {data?.issues && data.issues.length > 0 ? (
-            <div className="bg-white dark:bg-slate-900 rounded-lg shadow overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-900">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                      ID
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                      Student
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                      Type
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                      Message
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                      Created At
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                      Status
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                  {data.issues.map((issue: any) => (
-                    <tr key={issue.id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        {String(issue.id).substring(0, 8)}...
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        {issue.studentName}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        {issue.type}
-                      </td>
-                      <td className="px-6 py-4 text-sm">{issue.message}</td>
-                      <td className="px-6 py-4 text-sm">
-                        {new Date(issue.timestamp).toLocaleString('en-US', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            issue.solved
-                              ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                              : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-                          }`}
-                        >
-                          {issue.solved ? "Resolved" : "Pending"}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow text-center">
-              <p className="text-gray-500 dark:text-gray-400">
-                No issues found.
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Search Modal */}
-      <SearchModal
-        isOpen={isSearchModalOpen}
-        onClose={() => setIsSearchModalOpen(false)}
-        data={data || {}}
-      />
-
-      {/* Edit Profile Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto relative">
-            <button
+        <AnimatePresence>
+          {isModalOpen && (
+            <motion.div
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
               onClick={handleCloseModal}
-              className="absolute top-4 right-4 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800"
             >
-              <X size={20} />
-            </button>
-
-            <div className="p-6">
-              <h2 className="text-xl font-bold mb-6 dark:text-white">
-                Edit Profile Photo
-              </h2>
-              <ProfileImageUploader
-                currentImageUrl={profileData?.profilePictureUrl || ""}
-                studentName={profileData?.fullName || ""}
-                onImageUploaded={handleImageUploaded}
-              />
-              <div className="flex justify-end mt-6">
+              <motion.div
+                className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto relative"
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ duration: 0.2 }}
+                onClick={(e) => e.stopPropagation()}
+              >
                 <button
                   onClick={handleCloseModal}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-800 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700"
+                  className="absolute top-4 right-4 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
                 >
-                  Close
+                  <X size={20} className="text-gray-500 dark:text-gray-400" />
                 </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+
+                <div className="p-6 sm:p-8">
+                  <h2 className="text-2xl font-bold mb-6 dark:text-white flex items-center gap-2">
+                    <User size={24} className="text-purple-500" />
+                    Edit Profile
+                  </h2>
+
+                  <ProfileImageUploader
+                    currentImageUrl={profileData?.profilePictureUrl || ""}
+                    studentName={profileData?.fullName || ""}
+                    onImageUploaded={handleImageUploaded}
+                  />
+
+                  <div className="flex justify-end mt-6">
+                    <button
+                      onClick={handleCloseModal}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </AuthGuard>
   );
 }
+
+const ProfileSkeleton = () => {
+  return (
+    <div className="flex flex-col md:flex-row items-center md:items-end gap-6 md:gap-10 w-full">
+      <div className="w-32 h-32 md:w-36 md:h-36 rounded-full bg-gray-200 dark:bg-slate-700 shrink-0 animate-pulse"></div>
+      <div className="flex-1 w-full">
+        <div className="flex flex-col md:flex-row justify-between items-center md:items-start w-full">
+          <div className="space-y-3 text-center md:text-left">
+            <div className="h-7 w-48 bg-gray-200 dark:bg-slate-700 rounded-md animate-pulse mx-auto md:mx-0"></div>
+            <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded-md animate-pulse mx-auto md:mx-0"></div>
+            <div className="h-4 w-56 bg-gray-200 dark:bg-slate-700 rounded-md animate-pulse mx-auto md:mx-0"></div>
+          </div>
+          <div className="flex items-center gap-3 mt-4 md:mt-0">
+            <div className="w-10 h-10 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse"></div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-3 mt-5 justify-center md:justify-start">
+          <div className="h-10 w-32 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse"></div>
+          <div className="h-10 w-32 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse"></div>
+          <div className="h-10 w-32 bg-gray-200 dark:bg-slate-700 rounded-full animate-pulse"></div>
+        </div>
+      </div>
+    </div>
+  );
+};

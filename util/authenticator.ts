@@ -1,6 +1,4 @@
 import admin from "firebase-admin";
-import * as fs from "fs";
-import * as path from "path";
 
 // Initialize Firebase Admin if not already initialized
 const serviceAccount = require("../serviceAccountKey.json");
@@ -28,44 +26,39 @@ async function setupAuthentication() {
   try {
     console.log("🔐 Starting authentication setup...");
     
-    // Get all users from different role collections
-    const roles = [
-      "chief_warden", 
-      "supervisors", 
-      "hostel_wardens", 
-      "floor_wardens", 
-      "floor_attendants"
-    ];
+    // Only process floor wardens
+    const roles = ["floor_wardens"];
     
-    // Process staff roles (non-students)
+    // Process floor wardens only
     for (const role of roles) {
-      console.log(`👥 Processing ${role}...`);
+      console.log(`👥 Processing ${role} collection...`);
       const snapshot = await db.collection(role).get();
+      let processed = 0, skipped = 0, updated = 0, created = 0;
       
       for (const doc of snapshot.docs) {
         const userData = doc.data() as User;
         
-        if (!userData.email) {
-          console.warn(`⚠️ User ${doc.id} has no email. Skipping...`);
+        if (!userData.email || !userData.phoneNumber) {
+          skipped++;
           continue;
         }
         
-        if (!userData.phoneNumber) {
-          console.warn(`⚠️ User ${doc.id} has no phone number. Skipping...`);
-          continue;
-        }
+        // Generate a valid password from phone number
+        const phoneStr = Array.isArray(userData.phoneNumber) ? 
+          userData.phoneNumber[0] : userData.phoneNumber;
+        // Ensure password is at least 6 characters
+        const password = phoneStr.length >= 6 ? 
+          phoneStr : phoneStr.padEnd(6, phoneStr[0] || '0');
         
         try {
           // Check if user already exists
           try {
-            await auth.getUserByEmail(userData.email);
-            console.log(`ℹ️ User ${userData.email} already exists. Updating...`);
+            const userRecord = await auth.getUserByEmail(userData.email);
             
             // Update user
-            const userRecord = await auth.getUserByEmail(userData.email);
             await auth.updateUser(userRecord.uid, {
               email: userData.email,
-              password: userData.phoneNumber.replace(/[+\s-]/g, ''), // Remove special chars from phone
+              password: password,
               displayName: doc.data().fullName || doc.id,
             });
             
@@ -74,14 +67,13 @@ async function setupAuthentication() {
               role: userData.role,
               id: doc.id
             });
-            
-            console.log(`✅ Updated user ${userData.email} with role ${userData.role}`);
+            updated++;
           } catch (error) {
             // User doesn't exist, create new one
             if ((error as any).code === 'auth/user-not-found') {
               const userRecord = await auth.createUser({
                 email: userData.email,
-                password: userData.phoneNumber.replace(/[+\s-]/g, ''), // Remove special chars from phone
+                password: password,
                 displayName: doc.data().fullName || doc.id,
               });
               
@@ -90,82 +82,21 @@ async function setupAuthentication() {
                 role: userData.role,
                 id: doc.id
               });
-              
-              console.log(`✅ Created user ${userData.email} with role ${userData.role}`);
+              created++;
             } else {
               throw error;
             }
           }
+          processed++;
         } catch (error) {
-          console.error(`❌ Error processing user ${doc.id}:`, error);
+          console.error(`Error processing user ${doc.id}:`, error);
+          skipped++;
         }
       }
+      console.log(`✅ ${role}: ${processed} processed (${created} created, ${updated} updated), ${skipped} skipped`);
     }
     
-    // Process students
-    console.log("👨‍🎓 Processing students...");
-    const studentsSnapshot = await db.collection("students").get();
-    
-    for (const doc of studentsSnapshot.docs) {
-      const studentData = doc.data() as Student;
-      
-      if (!studentData.email) {
-        console.warn(`⚠️ Student ${doc.id} has no email. Skipping...`);
-        continue;
-      }
-      
-      if (!studentData.registrationNumber) {
-        console.warn(`⚠️ Student ${doc.id} has no registration number. Skipping...`);
-        continue;
-      }
-      
-      try {
-        // Check if user already exists
-        try {
-          await auth.getUserByEmail(studentData.email);
-          console.log(`ℹ️ Student ${studentData.email} already exists. Updating...`);
-          
-          // Update user
-          const userRecord = await auth.getUserByEmail(studentData.email);
-          await auth.updateUser(userRecord.uid, {
-            email: studentData.email,
-            password: studentData.registrationNumber.toString(),
-            displayName: doc.data().fullName || doc.id,
-          });
-          
-          // Set custom claims for role-based access
-          await auth.setCustomUserClaims(userRecord.uid, { 
-            role: 'student',
-            id: doc.id
-          });
-          
-          console.log(`✅ Updated student ${studentData.email}`);
-        } catch (error) {
-          // User doesn't exist, create new one
-          if ((error as any).code === 'auth/user-not-found') {
-            const userRecord = await auth.createUser({
-              email: studentData.email,
-              password: studentData.registrationNumber.toString(),
-              displayName: doc.data().fullName || doc.id,
-            });
-            
-            // Set custom claims for role-based access
-            await auth.setCustomUserClaims(userRecord.uid, { 
-              role: 'student',
-              id: doc.id
-            });
-            
-            console.log(`✅ Created student ${studentData.email}`);
-          } else {
-            throw error;
-          }
-        }
-      } catch (error) {
-        console.error(`❌ Error processing student ${doc.id}:`, error);
-      }
-    }
-    
-    console.log("🎉 Authentication setup completed!");
+    console.log("🎉 Authentication setup completed for floor wardens only!");
   } catch (error) {
     console.error("❌ Error setting up authentication:", error);
   }
