@@ -1,0 +1,52 @@
+[
+  {
+    "fullName": "Mr. Ranjit Kami",
+    "email": "ranjit.kami@university.edu",
+    "profilePictureUrl": "",
+    "phoneNumber": ["9775126123"],
+    "role": "floor_attendant",
+    "assignedFloorsName": ["J", "K", "L"],
+    "assignedFloors": ["1", "2", "3"],
+    "reportsTo": ""
+  },
+  {
+    "fullName": "Mr. Ishmaran Poudyel",
+    "email": "ishmaran.poudyel@university.edu",
+    "phoneNumber": ["9883314519"],
+    "assignedFloorsName": ["J", "K", "L"],
+    "assignedFloors": ["4", "5", "6", "7"],
+    "role": "floor_attendant",
+    "profilePictureUrl": "",
+    "reportsTo": ""
+  },
+  {
+    "fullName": "Mr. Pravat Subba",
+    "email": "pravat.subba@university.edu",
+    "phoneNumber": ["6297954417"],
+    "assignedFloorsName": ["P", "Q", "R"],
+    "assignedFloors": ["3", "4", "5"],
+    "role": "floor_attendant",
+    "profilePictureUrl": "",
+    "reportsTo": ""
+  },
+  {
+    "fullName": "Mr. Aditya Rai",
+    "email": "aditya.rai@university.edu",
+    "phoneNumber": ["6297452107"],
+    "assignedFloorsName": ["P", "Q", "R"],
+    "assignedFloors": ["6", "7", "8"],
+    "role": "floor_attendant",
+    "profilePictureUrl": "",
+    "reportsTo": ""
+  },
+  {
+    "fullName": "Mr. Laxuman Chettri",
+    "email": "laxuman.chettri@university.edu",
+    "phoneNumber": ["7797270648"],
+    "assignedFloorsName": ["M", "N", "O"],
+    "assignedFloors": ["6", "7"],
+    "role": "floor_attendant",
+    "profilePictureUrl": "",
+    "reportsTo": ""
+  }
+]

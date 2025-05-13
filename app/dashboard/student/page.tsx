@@ -1001,7 +1001,7 @@ export default function StudentDashboard() {
                       : "text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
                   }`}
                 >
-                  Feed
+                  All Feed
                   {activeTab === "feed" && (
                     <motion.div
                       className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500"
@@ -1532,11 +1532,21 @@ const MessageBox: React.FC<
   );
 };
 
-// Room Photo Tab Component
 const RoomPhotoTab = React.memo(
   ({ studentData }: { studentData: StudentData | null }) => {
     const hostelNumber = studentData?.hostelDetails?.hostelId || "";
     const roomNumber = studentData?.hostelDetails?.roomNumber || "";
+    const [selectedImage, setSelectedImage] = React.useState(1); // Track selected image
+    
+    // Array of room images
+    const roomImages = [
+      '/rooms/r1.jpg',
+      '/rooms/r2.jpg',
+      '/rooms/r3.jpg',
+      '/rooms/r4.jpg',
+      '/rooms/r5.jpg',
+      '/rooms/r6.jpg'
+    ];
 
     return (
       <motion.div
@@ -1548,35 +1558,42 @@ const RoomPhotoTab = React.memo(
         <div className="flex flex-col space-y-4">
           <h2 className="text-lg font-semibold text-gray-800 dark:text-white flex items-center gap-2">
             <Camera size={20} className="text-indigo-500" />
-            Room Photo: {roomNumber}
+            Room Photos: {roomNumber}
           </h2>
 
+          {/* Main selected image display */}
           <div className="relative w-full h-[300px] sm:h-[400px] md:h-[500px] overflow-hidden rounded-lg">
             <Image
-              src="/room-placeholder.jpeg"
-              alt={`Room ${roomNumber} photo`}
+              src={roomImages[selectedImage - 1]}
+              alt={`Room ${roomNumber} photo ${selectedImage}`}
               fill
               className="object-cover"
             />
             <div className="absolute bottom-4 right-4 bg-black/70 px-3 py-1.5 rounded-lg text-white text-sm">
-              Hostel {hostelNumber}, Room {roomNumber}
+              Hostel {hostelNumber}, Room {roomNumber} - Photo {selectedImage}/6
             </div>
           </div>
 
-          <div className="bg-gray-50 dark:bg-slate-700/30 rounded-lg p-4 text-sm text-gray-600 dark:text-gray-300">
-            <p className="mb-2">
-              This is a placeholder room photo. In the actual implementation,
-              this could:
-            </p>
-            <ul className="list-disc pl-5 space-y-1">
-              <li>
-                Display the most recent image of your room from inspections
-              </li>
-              <li>
-                Allow you to upload your own photos for maintenance requests
-              </li>
-              <li>Show historical room condition for documentation</li>
-            </ul>
+          {/* Thumbnail gallery */}
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+            {roomImages.map((image, index) => (
+              <button
+                key={index}
+                onClick={() => setSelectedImage(index + 1)}
+                className={`relative aspect-square rounded-md overflow-hidden border-2 transition-all ${
+                  selectedImage === index + 1 
+                    ? 'border-indigo-500 shadow-md' 
+                    : 'border-transparent hover:border-indigo-300'
+                }`}
+              >
+                <Image
+                  src={image}
+                  alt={`Room thumbnail ${index + 1}`}
+                  fill
+                  className="object-cover"
+                />
+              </button>
+            ))}
           </div>
         </div>
       </motion.div>

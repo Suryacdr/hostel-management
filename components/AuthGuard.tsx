@@ -37,7 +37,6 @@ export default function AuthGuard({
     return () => unsubscribe();
   }, [router, pathname, publicRoutes]);
 
-  // Show nothing while we're checking authentication
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">

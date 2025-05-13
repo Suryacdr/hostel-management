@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { auth } from "@/lib/firebase";
 import {
   User,
@@ -32,16 +32,31 @@ import AuthGuard from "@/components/AuthGuard";
 import Link from "next/link";
 
 interface Student {
-  id: string;
-  name: string;
+  id?: string;
+  name?: string;
+  fullName?: string;
   email: string;
   course?: string;
   department?: string;
   room?: string;
   hostel?: string;
-  profilePictureUrl?: string;
   floorId?: string;
   floor?: string;
+  registrationNumber?: number;
+  year?: string;
+  dateOfOccupancy?: string;
+  age?: number;
+  phoneNumber?: number;
+  hostelDetails?: {
+    hostelId: string;
+    room_id: string;
+    roomNumber: string;
+    floor: string;
+    floorName?: string;
+  };
+  profilePictureUrl?: string;
+  uid?: string;
+  floorName?: string;
 }
 
 interface FloorAttendant {
@@ -173,7 +188,6 @@ export default function FloorWardenDashboard() {
 
       const token = await user.getIdToken(true);
 
-      // Step 1: Fetch base dashboard data first
       const response = await fetch("/api/fetch", {
         method: "GET",
         headers: {
@@ -189,7 +203,6 @@ export default function FloorWardenDashboard() {
       const dashboardData = await response.json();
       console.log("Base dashboard data loaded for floor warden:", dashboardData);
 
-      // Get assigned floor IDs
       const floorIds = dashboardData.floors?.map((floor: Floor) => floor.id) || [];
       
       if (floorIds.length === 0) {
@@ -198,15 +211,7 @@ export default function FloorWardenDashboard() {
         console.log("Found floor IDs:", floorIds);
       }
       
-      // Step 2: Fetch floor-specific issues using dedicated endpoint
       const issuesUrl = new URL("/api/issue/floor-issues", window.location.origin);
-      if (filterStatus !== 'all') {
-        issuesUrl.searchParams.append('status', filterStatus);
-      }
-      if (filterType !== 'all') {
-        issuesUrl.searchParams.append('type', filterType);
-      }
-      
       console.log("Fetching issues from:", issuesUrl.toString());
       
       const issuesResponse = await fetch(issuesUrl.toString(), {
@@ -226,35 +231,55 @@ export default function FloorWardenDashboard() {
         console.error("Failed to fetch issues:", await issuesResponse.text());
       }
 
-      // Step 3: Fetch students for these floors
       let students: Student[] = [];
-      if (floorIds.length > 0) {
-        try {
-          const studentsUrl = new URL("/api/students", window.location.origin);
-          studentsUrl.searchParams.append("floorIds", floorIds.join(','));
+      
+      // Fetch all students assigned to the floor warden's floors using the enhanced API
+      try {
+        const studentsUrl = new URL("/api/students/get-students", window.location.origin);
+        
+        console.log("Fetching students for floor warden's assigned floors");
+        
+        const studentsResponse = await fetch(studentsUrl.toString(), {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
+        
+        if (studentsResponse.ok) {
+          const studentsData = await studentsResponse.json();
+          console.log("Students data received:", studentsData);
+          students = studentsData.students || [];
           
-          console.log("Fetching students from:", studentsUrl.toString());
-          
-          const studentsResponse = await fetch(studentsUrl.toString(), {
-            method: "GET",
-            headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json"
-            }
-          });
-          
-          if (studentsResponse.ok) {
-            const studentsData = await studentsResponse.json();
-            console.log("Students data received:", studentsData);
-            students = studentsData.students || [];
-          } else {
-            console.error("Failed to fetch students:", await studentsResponse.text());
+          // Add floor names to students for easier display/filtering
+          if (students.length > 0 && dashboardData.floors) {
+            const floorMap = new Map();
+            dashboardData.floors.forEach((floor: Floor) => {
+              floorMap.set(floor.id, floor.name || `Floor ${floor.number}`);
+            });
+            
+            students = students.map(student => {
+              const floorId = student.hostelDetails?.floor || student.floorId || student.floor;
+              const floorName = floorId ? floorMap.get(floorId) : undefined;
+              
+              return {
+                ...student,
+                floorName,
+                hostelDetails: student.hostelDetails ? {
+                  ...student.hostelDetails,
+                  floorName
+                } : undefined
+              };
+            });
           }
-        } catch (error) {
-          console.error("Error fetching students:", error);
+        } else {
+          console.error("Failed to fetch students:", await studentsResponse.text());
         }
+      } catch (error) {
+        console.error("Error fetching students:", error);
       }
-
+      
       let attendants: FloorAttendant[] = [];
       if (floorIds.length > 0) {
         try {
@@ -328,7 +353,6 @@ export default function FloorWardenDashboard() {
         throw new Error(errorData.error || 'Failed to update issue status');
       }
 
-      // Update local state
       setData(prevData => {
         if (!prevData || !prevData.issues) return prevData;
         
@@ -362,9 +386,65 @@ export default function FloorWardenDashboard() {
 
   useEffect(() => {
     fetchDashboardData();
-  }, [filterStatus, filterType, selectedFloor]);
+  }, []);
 
-  // Format date for display
+  const getFilteredIssues = useCallback(() => {
+    if (!data?.issues) return [];
+    
+    return data.issues.filter(issue => {
+      const matchesStatus = 
+        filterStatus === 'all' || 
+        (filterStatus === 'pending' && !issue.solved) || 
+        (filterStatus === 'solved' && issue.solved);
+        
+      const matchesType = 
+        filterType === 'all' || 
+        issue.type === filterType;
+        
+      const matchesFloor = 
+        selectedFloor === 'all' || 
+        issue.floor === selectedFloor;
+        
+      return matchesStatus && matchesType && matchesFloor;
+    });
+  }, [data?.issues, filterStatus, filterType, selectedFloor]);
+
+  const getFilteredStudents = useCallback(() => {
+    if (!data?.students) return [];
+    
+    return data.students.filter(student => {
+      const studentFloorId = student.hostelDetails?.floor || student.floorId || student.floor;
+      return selectedFloor === 'all' || studentFloorId === selectedFloor;
+    });
+  }, [data?.students, selectedFloor]);
+
+  const getFilteredAttendants = useCallback(() => {
+    if (!data?.attendants) return [];
+    
+    return data.attendants.filter(attendant => 
+      selectedFloor === 'all' || 
+      (attendant.assignedFloors && attendant.assignedFloors.includes(selectedFloor))
+    );
+  }, [data?.attendants, selectedFloor]);
+
+  const filteredIssues = useMemo(() => getFilteredIssues(), [getFilteredIssues]);
+  const filteredStudents = useMemo(() => getFilteredStudents(), [getFilteredStudents]);
+  const filteredAttendants = useMemo(() => getFilteredAttendants(), [getFilteredAttendants]);
+
+  const statistics = useMemo(() => {
+    const totalStudents = data?.students?.length || 0;
+    const totalIssues = data?.issues?.length || 0;
+    const pendingIssues = data?.issues?.filter(issue => !issue.solved).length || 0;
+    const totalFloors = data?.floors?.length || 0;
+    
+    return {
+      totalStudents,
+      totalIssues,
+      pendingIssues,
+      totalFloors
+    };
+  }, [data?.students, data?.issues, data?.floors]);
+
   const formatDate = (timestamp: Date | string): string => {
     const date = new Date(timestamp);
     const now = new Date();
@@ -385,68 +465,8 @@ export default function FloorWardenDashboard() {
     }
   };
 
-  // Get filtered issues based on current filters
-  const getFilteredIssues = () => {
-    if (!data?.issues) return [];
-    
-    return data.issues.filter(issue => {
-      const matchesStatus = 
-        filterStatus === 'all' || 
-        (filterStatus === 'pending' && !issue.solved) || 
-        (filterStatus === 'solved' && issue.solved);
-        
-      const matchesType = 
-        filterType === 'all' || 
-        issue.type === filterType;
-        
-      const matchesFloor = 
-        selectedFloor === 'all' || 
-        issue.floor === selectedFloor;
-        
-      return matchesStatus && matchesType && matchesFloor;
-    });
-  };
-
-  // Get filtered students based on selected floor
-  const getFilteredStudents = () => {
-    if (!data?.students) return [];
-    
-    return data.students.filter(student => 
-      selectedFloor === 'all' || 
-      student.floor === selectedFloor || 
-      student.floorId === selectedFloor
-    );
-  };
-
-  // Get filtered floor attendants based on selected floor
-  const getFilteredAttendants = () => {
-    if (!data?.attendants) return [];
-    
-    return data.attendants.filter(attendant => 
-      selectedFloor === 'all' || 
-      (attendant.assignedFloors && attendant.assignedFloors.includes(selectedFloor))
-    );
-  };
-
-  // Calculate statistics for display
-  const getStatistics = () => {
-    const totalStudents = data?.students?.length || 0;
-    const totalIssues = data?.issues?.length || 0;
-    const pendingIssues = data?.issues?.filter(issue => !issue.solved).length || 0;
-    const totalFloors = data?.floors?.length || 0;
-    
-    return {
-      totalStudents,
-      totalIssues,
-      pendingIssues,
-      totalFloors
-    };
-  };
-
-  // Filter components
   const FilterControls = () => (
     <div className="mb-6 space-y-4">
-      {/* Floor Filter */}
       <div className="flex flex-wrap gap-2">
         <span className="text-sm font-medium text-gray-700 dark:text-gray-300 self-center mr-2">Floor:</span>
         <button
@@ -475,7 +495,6 @@ export default function FloorWardenDashboard() {
         ))}
       </div>
       
-      {/* Status and Type Filters (only show on issues tab) */}
       {activeTab === 'issues' && (
         <>
           <div className="flex flex-wrap gap-2">
@@ -556,15 +575,11 @@ export default function FloorWardenDashboard() {
     </div>
   );
 
-  const stats = getStatistics();
-
   return (
     <AuthGuard>
       <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-slate-900 dark:text-white">
-        {/* Header with profile info */}
         <div className="bg-white dark:bg-slate-800 shadow-md mb-6">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-            {/* Mobile menu controls */}
             <div className="flex md:hidden absolute top-4 right-4 z-10 items-center gap-2">
               <ThemeToggle />
               <button
@@ -603,7 +618,6 @@ export default function FloorWardenDashboard() {
               </AnimatePresence>
             </div>
 
-            {/* Profile section */}
             <div className="py-6 md:py-8 flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-10">
               {loading ? (
                 <ProfileSkeleton />
@@ -612,7 +626,7 @@ export default function FloorWardenDashboard() {
                   <div className="relative">
                     <div className="w-28 h-28 md:w-32 md:h-32 rounded-full overflow-hidden ring-4 ring-white dark:ring-slate-700 bg-white dark:bg-slate-700 shadow-md shrink-0">
                       <Image
-                        src={data?.floorWarden?.profilePictureUrl || "/profile-placeholder.png"}
+                        src={data?.floorWarden?.profilePictureUrl || "/boy.png"}
                         width={150}
                         height={150}
                         alt="Profile"
@@ -656,7 +670,6 @@ export default function FloorWardenDashboard() {
                         )}
                       </div>
 
-                      {/* Desktop menu controls */}
                       <div className="hidden md:flex items-center gap-3 relative">
                         <ThemeToggle />
                         <button
@@ -700,24 +713,23 @@ export default function FloorWardenDashboard() {
                       </div>
                     </div>
 
-                    {/* Stats */}
                     <div className="flex flex-wrap justify-center md:justify-start gap-3 mt-4">
                       <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 rounded-lg shadow-sm">
                         <Home size={16} className="text-blue-500" />
                         <span className="text-xs md:text-sm font-medium">
-                          {stats.totalFloors} Floors
+                          {statistics.totalFloors} Floors
                         </span>
                       </div>
                       <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 rounded-lg shadow-sm">
                         <Users size={16} className="text-indigo-500" />
                         <span className="text-xs md:text-sm font-medium">
-                          {stats.totalStudents} Students
+                          {statistics.totalStudents} Students
                         </span>
                       </div>
                       <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 rounded-lg shadow-sm">
                         <Bell size={16} className="text-red-500" />
                         <span className="text-xs md:text-sm font-medium">
-                          {stats.pendingIssues} Pending Issues
+                          {statistics.pendingIssues} Pending Issues
                         </span>
                       </div>
                       <Link href="/notice-board" className="flex items-center gap-2 px-3 py-1.5 bg-blue-500 text-white rounded-lg shadow-sm hover:bg-blue-600 transition-colors">
@@ -733,9 +745,7 @@ export default function FloorWardenDashboard() {
           </div>
         </div>
 
-        {/* Main content area */}
         <div className="flex-1 max-w-7xl mx-auto px-4 pb-8 w-full">
-          {/* Tab navigation */}
           <div className="mb-6 border-b border-gray-200 dark:border-slate-700">
             <div className="flex space-x-6">
               <button
@@ -781,7 +791,6 @@ export default function FloorWardenDashboard() {
             </div>
           </div>
 
-          {/* Filters */}
           <FilterControls />
 
           {loading ? (
@@ -815,7 +824,7 @@ export default function FloorWardenDashboard() {
             <>
               {activeTab === 'issues' && (
                 <>
-                  {(!getFilteredIssues() || getFilteredIssues().length === 0) ? (
+                  {(!filteredIssues || filteredIssues.length === 0) ? (
                     <motion.div
                       className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow text-center"
                       initial={{ opacity: 0, y: 20 }}
@@ -850,7 +859,7 @@ export default function FloorWardenDashboard() {
                     </motion.div>
                   ) : (
                     <div className="space-y-4">
-                      {getFilteredIssues().map((issue, index) => (
+                      {filteredIssues.map((issue, index) => (
                         <motion.div
                           key={issue.id}
                           className="bg-white dark:bg-slate-800 p-4 md:p-5 rounded-xl shadow-md"
@@ -946,7 +955,31 @@ export default function FloorWardenDashboard() {
 
               {activeTab === 'students' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {(!getFilteredStudents() || getFilteredStudents().length === 0) ? (
+                  {loading ? (
+                    Array(6).fill(0).map((_, index) => (
+                      <motion.div
+                        key={index}
+                        className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-md flex flex-col h-full animate-pulse"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: 0.05 * index }}
+                      >
+                        <div className="flex items-start gap-4">
+                          <div className="w-14 h-14 rounded-full bg-gray-200 dark:bg-slate-700"></div>
+                          <div className="flex-1">
+                            <div className="h-5 w-32 bg-gray-200 dark:bg-slate-700 rounded-md"></div>
+                            <div className="h-4 w-24 bg-gray-200 dark:bg-slate-700 rounded-md mt-2"></div>
+                            <div className="h-3 w-20 bg-gray-200 dark:bg-slate-700 rounded-md mt-2"></div>
+                          </div>
+                        </div>
+                        <div className="mt-3 pt-3 space-y-2">
+                          <div className="h-4 w-full bg-gray-200 dark:bg-slate-700 rounded-md"></div>
+                          <div className="h-4 w-full bg-gray-200 dark:bg-slate-700 rounded-md"></div>
+                          <div className="h-4 w-3/4 bg-gray-200 dark:bg-slate-700 rounded-md"></div>
+                        </div>
+                      </motion.div>
+                    ))
+                  ) : (!filteredStudents || filteredStudents.length === 0) ? (
                     <motion.div
                       className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow text-center col-span-full"
                       initial={{ opacity: 0, y: 20 }}
@@ -978,46 +1011,84 @@ export default function FloorWardenDashboard() {
                       </div>
                     </motion.div>
                   ) : (
-                    getFilteredStudents().map((student, index) => (
+                    filteredStudents.map((student, index) => (
                       <motion.div
-                        key={student.id}
-                        className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-md"
+                        key={student.id || index}
+                        className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-md flex flex-col h-full"
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3, delay: 0.05 * (index % 9) }}
                       >
                         <div className="flex items-start gap-4">
-                          <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-100 dark:bg-slate-700">
+                          <div className="w-14 h-14 rounded-full overflow-hidden bg-gray-100 dark:bg-slate-700 shrink-0">
                             {student.profilePictureUrl ? (
                               <Image
                                 src={student.profilePictureUrl}
-                                width={48}
-                                height={48}
-                                alt={student.name}
+                                width={56}
+                                height={56}
+                                alt={student.fullName || student.name || "Student"}
                                 className="object-cover w-full h-full"
                               />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-gray-400 dark:text-gray-500">
-                                <UserCircle size={24} />
+                                <UserCircle size={28} />
                               </div>
                             )}
                           </div>
                           <div className="flex-1">
-                            <h3 className="font-medium text-gray-800 dark:text-white">{student.name}</h3>
-                            {student.course && (
+                            <h3 className="font-medium text-gray-800 dark:text-white text-lg">
+                              {student.fullName || student.name || "Unknown Student"}
+                            </h3>
+                            {student.course && student.department && (
+                              <p className="text-sm text-blue-600 dark:text-blue-400">
+                                {student.course} · {student.department}
+                              </p>
+                            )}
+                            {(student.course && !student.department) && (
                               <p className="text-sm text-blue-600 dark:text-blue-400">{student.course}</p>
                             )}
-                            <div className="mt-2 space-y-1 text-sm text-gray-500 dark:text-gray-400">
-                              <div className="flex items-center gap-1">
-                                <Mail size={12} />
-                                {student.email}
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Building2 size={12} />
-                                {student.hostel || "Unknown Hostel"} · Room {student.room || "Not assigned"}
-                              </div>
+                            {(!student.course && student.department) && (
+                              <p className="text-sm text-blue-600 dark:text-blue-400">{student.department}</p>
+                            )}
+                            {student.registrationNumber && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                Reg: {student.registrationNumber}
+                              </p>
+                            )}
+                            <div className="mt-1">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300">
+                                <ArrowUp size={10} className="mr-1" />
+                                {student.hostelDetails?.floorName || student.floorName || `Floor ${student.hostelDetails?.floor || student.floor || student.floorId || 'Unknown'}`}
+                              </span>
                             </div>
                           </div>
+                        </div>
+                        
+                        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700 space-y-2 text-sm text-gray-500 dark:text-gray-400">
+                          <div className="flex items-center gap-2">
+                            <Mail className="w-4 h-4 text-gray-400" />
+                            <span className="truncate">{student.email}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Building2 className="w-4 h-4 text-gray-400" />
+                            <span>{student.hostelDetails?.hostelId || student.hostel || "Unassigned Hostel"}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <DoorOpen className="w-4 h-4 text-gray-400" />
+                            <span>Room {student.hostelDetails?.roomNumber || student.room || "Not assigned"}</span>
+                          </div>
+                          {student.phoneNumber && (
+                            <div className="flex items-center gap-2">
+                              <Phone className="w-4 h-4 text-gray-400" />
+                              <span>{student.phoneNumber}</span>
+                            </div>
+                          )}
+                          {student.year && (
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 text-gray-400" />
+                              <span>Year: {student.year}</span>
+                            </div>
+                          )}
                         </div>
                       </motion.div>
                     ))
@@ -1027,7 +1098,7 @@ export default function FloorWardenDashboard() {
 
               {activeTab === 'attendants' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {(!getFilteredAttendants() || getFilteredAttendants().length === 0) ? (
+                  {(!filteredAttendants || filteredAttendants.length === 0) ? (
                     <motion.div
                       className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow text-center col-span-full"
                       initial={{ opacity: 0, y: 20 }}
@@ -1059,7 +1130,7 @@ export default function FloorWardenDashboard() {
                       </div>
                     </motion.div>
                   ) : (
-                    getFilteredAttendants().map((attendant, index) => (
+                    filteredAttendants.map((attendant, index) => (
                       <motion.div
                         key={attendant.id}
                         className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-md"
@@ -1117,7 +1188,6 @@ export default function FloorWardenDashboard() {
           )}
         </div>
 
-        {/* Profile edit modal */}
         <AnimatePresence>
           {isModalOpen && (
             <motion.div

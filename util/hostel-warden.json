@@ -1,0 +1,11 @@
+[
+  {
+    "fullName": "Dr. Satradu Jha",
+    "email": "satradu.jha@university.edu.in",
+    "profilePictureUrl": "",
+    "phoneNumber": ["8967596965"],
+    "role": "hostel_warden",
+    "assignedHostel": ["BH-2"],
+    "reportsTo": ""
+  }
+]
