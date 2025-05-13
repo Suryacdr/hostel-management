@@ -84,6 +84,7 @@ interface Room {
   floorId: string;
   capacity: number;
   occupancy: number;
+  photos?: string[];
 }
 
 interface Issue {
@@ -128,8 +129,9 @@ export default function FloorWardenDashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'solved'>('all');
   const [filterType, setFilterType] = useState<'all' | 'complaint' | 'maintenance'>('all');
-  const [activeTab, setActiveTab] = useState<'issues' | 'students' | 'attendants'>('issues');
+  const [activeTab, setActiveTab] = useState<'issues' | 'students' | 'attendants' | 'photos'>('issues');
   const [selectedFloor, setSelectedFloor] = useState<string>('all');
+  const [roomPhotos, setRoomPhotos] = useState<Room[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const handleSignOut = () => {
@@ -231,36 +233,152 @@ export default function FloorWardenDashboard() {
         console.error("Failed to fetch issues:", await issuesResponse.text());
       }
 
+      const floorWarden = dashboardData.floorWarden;
+      console.log("Floor Warden data:", floorWarden);
+      
+      // Move floorsToCheck declaration outside of any try blocks to make it accessible everywhere
+      const assignedFloors = floorWarden?.assignedFloors || [];
+      const assignedLevel = floorWarden?.assignedLevel || "";
+      
+      console.log("Assigned floors data:", assignedFloors);
+      console.log("Assigned level:", assignedLevel);
+      
+      // Create a combined array of floor IDs to check
+      let floorsToCheck: string[] = [...assignedFloors];
+      if (assignedLevel && !floorsToCheck.includes(assignedLevel)) {
+        floorsToCheck.push(assignedLevel);
+      }
+
       let students: Student[] = [];
       
-      // Fetch all students assigned to the floor warden's floors using the enhanced API
       try {
-        const studentsUrl = new URL("/api/students/get-students", window.location.origin);
-        
-        console.log("Fetching students for floor warden's assigned floors");
-        
-        const studentsResponse = await fetch(studentsUrl.toString(), {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        });
-        
-        if (studentsResponse.ok) {
-          const studentsData = await studentsResponse.json();
-          console.log("Students data received:", studentsData);
-          students = studentsData.students || [];
-          
-          // Add floor names to students for easier display/filtering
-          if (students.length > 0 && dashboardData.floors) {
-            const floorMap = new Map();
-            dashboardData.floors.forEach((floor: Floor) => {
-              floorMap.set(floor.id, floor.name || `Floor ${floor.number}`);
-            });
+        // If there's an assignedHostel, also try that
+        if (floorWarden?.assignedHostel) {
+          console.log("Assigned hostel:", floorWarden.assignedHostel);
+          // Try fetching by hostel instead if no floors are assigned
+          if (floorsToCheck.length === 0) {
+            const studentsUrl = new URL("/api/students", window.location.origin);
+            studentsUrl.searchParams.append("hostelId", floorWarden.assignedHostel);
             
-            students = students.map(student => {
-              const floorId = student.hostelDetails?.floor || student.floorId || student.floor;
+            console.log(`Trying to fetch students by hostel: ${studentsUrl.toString()}`);
+            
+            try {
+              const response = await fetch(studentsUrl.toString(), {
+                method: "GET",
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  "Content-Type": "application/json",
+                }
+              });
+              
+              if (response.ok) {
+                const data = await response.json();
+                console.log("Students fetched by hostel:", data);
+                students = data.students || [];
+              }
+            } catch (error) {
+              console.error("Error fetching by hostel:", error);
+            }
+          }
+        }
+        
+        if (floorsToCheck.length === 0) {
+          console.warn("No assigned floors or level found for this floor warden!");
+        } else {
+          console.log("Floors to check:", floorsToCheck);
+          
+          const studentsPromises = floorsToCheck.map((floorId: string) => {
+            // First try with direct floor ID
+            const studentsUrl = new URL("/api/students/get-students", window.location.origin);
+            studentsUrl.searchParams.append("floorId", floorId);
+            
+            console.log(`Fetching students for floor ${floorId} using URL: ${studentsUrl.toString()}`);
+            
+            return fetch(studentsUrl.toString(), {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+            })
+            .then(response => {
+              if (response.ok) {
+                return response.json();
+              }
+              
+              if (response.status === 403) {
+                console.error(`Access forbidden for floor ${floorId}, trying alternative endpoint`);
+                // Try alternate endpoint if the first one fails with 403
+                const altStudentsUrl = new URL("/api/students", window.location.origin);
+                altStudentsUrl.searchParams.append("floorIds", floorId);
+                
+                console.log(`Trying alternative URL: ${altStudentsUrl.toString()}`);
+                
+                return fetch(altStudentsUrl.toString(), {
+                  method: "GET",
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                  },
+                }).then(altResponse => {
+                  if (!altResponse.ok) {
+                    throw new Error(`Both endpoints failed for floor ${floorId}`);
+                  }
+                  return altResponse.json();
+                });
+              }
+              
+              // Handle other error cases
+              return response.text().then(text => {
+                try {
+                  const errorData = JSON.parse(text);
+                  console.error(`Detailed error for floor ${floorId}:`, errorData);
+                } catch (e) {
+                  console.error(`Error response for floor ${floorId}:`, text);
+                }
+                throw new Error(`Failed to fetch students for floor ${floorId}: ${response.status} ${response.statusText}`);
+              });
+            })
+            .then(data => {
+              console.log(`Received student data for floor ${floorId}:`, data);
+              return data;
+            })
+            .catch(error => {
+              console.error(`Error processing floor ${floorId}:`, error);
+              return { students: [] };
+            });
+          });
+          
+          const studentsResults = await Promise.all(studentsPromises);
+          
+          const allStudents = studentsResults.flatMap(result => result.students || []);
+          console.log("Total students data received:", allStudents.length, "students");
+          
+          if (allStudents.length > 0) {
+            const floorMap = new Map();
+            
+            const floors = dashboardData.floors || [];
+            
+            if (floors.length > 0) {
+              floors.forEach((floor: Floor) => {
+                floorMap.set(floor.id, floor.name || `Floor ${floor.number}`);
+              });
+            } else {
+              floorsToCheck.forEach((floorId: string) => {
+                floorMap.set(floorId, `Floor ${floorId}`);
+              });
+            }
+            
+            students = allStudents.map(student => {
+              // Correctly extract floor ID from hostelDetails or fallback options
+              const floorId = 
+                (student.hostelDetails && student.hostelDetails.floor) ? student.hostelDetails.floor : 
+                student.floorId || 
+                student.floor || 
+                (student.hostelDetails && student.hostelDetails.roomNumber && 
+                 student.hostelDetails.roomNumber.split('-')[0]) ||
+                '';
+                
               const floorName = floorId ? floorMap.get(floorId) : undefined;
               
               return {
@@ -272,9 +390,9 @@ export default function FloorWardenDashboard() {
                 } : undefined
               };
             });
+          } else {
+            students = allStudents;
           }
-        } else {
-          console.error("Failed to fetch students:", await studentsResponse.text());
         }
       } catch (error) {
         console.error("Error fetching students:", error);
@@ -307,6 +425,60 @@ export default function FloorWardenDashboard() {
         } catch (error) {
           console.error("Error fetching floor attendants:", error);
         }
+      }
+      
+      try {
+        // Update the URL to use the proper API route
+        const roomsUrl = new URL("/api/rooms/images", window.location.origin);
+        
+        // If there are assigned floors, filter by those
+        if (floorsToCheck.length > 0) {
+          roomsUrl.searchParams.append("floorIds", floorsToCheck.join(','));
+        } else if (floorWarden?.assignedHostel) {
+          roomsUrl.searchParams.append("hostelId", floorWarden.assignedHostel);
+        }
+        
+        console.log(`Fetching room photos from: ${roomsUrl.toString()}`);
+        
+        const roomsResponse = await fetch(roomsUrl.toString(), {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
+        
+        if (roomsResponse.ok) {
+          const roomsData = await roomsResponse.json();
+          console.log("Room photos data received:", roomsData);
+          setRoomPhotos(roomsData.rooms || []);
+        } else {
+          console.error("Failed to fetch room photos:", await roomsResponse.text());
+          
+          // Fallback to alternative endpoint if needed
+          const fallbackUrl = new URL("/api/rooms/photos", window.location.origin);
+          console.log(`Trying fallback URL for room photos: ${fallbackUrl.toString()}`);
+          
+          try {
+            const fallbackResponse = await fetch(fallbackUrl.toString(), {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+            });
+            
+            if (fallbackResponse.ok) {
+              const fallbackData = await fallbackResponse.json();
+              console.log("Fallback room photos received:", fallbackData);
+              setRoomPhotos(fallbackData.rooms || []);
+            }
+          } catch (fallbackError) {
+            console.error("Error in fallback room photos fetch:", fallbackError);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching room photos:", error);
       }
       
       const combinedData: DashboardData = {
@@ -427,9 +599,18 @@ export default function FloorWardenDashboard() {
     );
   }, [data?.attendants, selectedFloor]);
 
+  const getFilteredRoomPhotos = useCallback(() => {
+    if (!roomPhotos) return [];
+    
+    return roomPhotos.filter(room => {
+      return selectedFloor === 'all' || room.floorId === selectedFloor;
+    });
+  }, [roomPhotos, selectedFloor]);
+
   const filteredIssues = useMemo(() => getFilteredIssues(), [getFilteredIssues]);
   const filteredStudents = useMemo(() => getFilteredStudents(), [getFilteredStudents]);
   const filteredAttendants = useMemo(() => getFilteredAttendants(), [getFilteredAttendants]);
+  const filteredRoomPhotos = useMemo(() => getFilteredRoomPhotos(), [getFilteredRoomPhotos]);
 
   const statistics = useMemo(() => {
     const totalStudents = data?.students?.length || 0;
@@ -780,13 +961,13 @@ export default function FloorWardenDashboard() {
               </button>
               <button
                 className={`py-3 px-1 border-b-2 font-medium text-sm cursor-pointer ${
-                  activeTab === 'attendants'
+                  activeTab === 'photos'
                     ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                     : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                 }`}
-                onClick={() => setActiveTab('attendants')}
+                onClick={() => setActiveTab('photos')}
               >
-                Rooms Photo
+                Rooms Photos
               </button>
             </div>
           </div>
@@ -1178,6 +1359,96 @@ export default function FloorWardenDashboard() {
                               )}
                             </div>
                           </div>
+                        </div>
+                      </motion.div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'photos' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {loading ? (
+                    Array(6).fill(0).map((_, index) => (
+                      <motion.div
+                        key={index}
+                        className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-md flex flex-col animate-pulse"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: 0.05 * index }}
+                      >
+                        <div className="w-full h-48 bg-gray-200 dark:bg-slate-700 rounded-lg"></div>
+                        <div className="mt-3">
+                          <div className="h-5 bg-gray-200 dark:bg-slate-700 rounded-md w-2/3"></div>
+                          <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded-md w-1/2 mt-2"></div>
+                        </div>
+                      </motion.div>
+                    ))
+                  ) : (!filteredRoomPhotos || filteredRoomPhotos.length === 0) ? (
+                    <motion.div
+                      className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow text-center col-span-full"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="w-20 h-20 mb-4 text-gray-300 dark:text-gray-600">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={1.5}
+                              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                            />
+                          </svg>
+                        </div>
+                        <h3 className="text-xl font-medium text-gray-700 dark:text-gray-200 mb-2">
+                          No room photos available
+                        </h3>
+                        <p className="text-gray-500 dark:text-gray-400">
+                          There are no photos available{selectedFloor !== 'all' ? ' for this floor' : ' for your floors'}.
+                        </p>
+                      </div>
+                    </motion.div>
+                  ) : (
+                    filteredRoomPhotos.map((room, index) => (
+                      <motion.div
+                        key={room.id}
+                        className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-md flex flex-col"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: 0.05 * (index % 9) }}
+                      >
+                        {room.photos && room.photos.length > 0 ? (
+                          <div className="w-full h-48 rounded-lg overflow-hidden bg-gray-100 dark:bg-slate-700">
+                            <Image
+                              src={room.photos[0]}
+                              alt={`Room ${room.number}`}
+                              width={400}
+                              height={300}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-full h-48 rounded-lg bg-gray-100 dark:bg-slate-700 flex items-center justify-center">
+                            <span className="text-gray-400 dark:text-gray-500">No photo available</span>
+                          </div>
+                        )}
+                        <div className="mt-3">
+                          <h3 className="font-medium text-gray-800 dark:text-white">Room {room.number}</h3>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            Capacity: {room.capacity} | Occupancy: {room.occupancy}
+                          </p>
+                          {room.photos && room.photos.length > 1 && (
+                            <p className="text-xs text-blue-500 mt-2">
+                              +{room.photos.length - 1} more photos available
+                            </p>
+                          )}
                         </div>
                       </motion.div>
                     ))

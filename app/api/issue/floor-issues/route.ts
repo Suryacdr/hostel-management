@@ -78,7 +78,6 @@ export async function GET(request: NextRequest) {
 
         // Use only specified floor or all assigned floors
         const floorsToQuery = floorId ? [floorId] : assignedFloors;
-        console.log(`Querying floors for issues: ${floorsToQuery.join(', ')}`);
 
         // Collect all issues from all floors
         const allIssues = [];
@@ -144,9 +143,6 @@ export async function GET(request: NextRequest) {
             allIssues.push(...processedIssues);
         }
         
-        console.log(`Found ${allIssues.length} issues for the floor warden`);
-        
-        // Sort by timestamp (newest first)
         allIssues.sort((a, b) => {
             const dateA = new Date(a.timestamp).getTime();
             const dateB = new Date(b.timestamp).getTime();
